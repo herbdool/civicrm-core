@@ -58,27 +58,6 @@ class CRM_Core_BAO_Navigation extends CRM_Core_DAO_Navigation {
   }
 
   /**
-   * Get existing / build navigation for CiviCRM Admin Menu.
-   *
-   * @return array
-   *   associated array
-   */
-  public static function getMenus() {
-    $menus = array();
-
-    $menu = new CRM_Core_DAO_Menu();
-    $menu->domain_id = CRM_Core_Config::domainID();
-    $menu->find();
-
-    while ($menu->fetch()) {
-      if ($menu->title) {
-        $menus[$menu->path] = $menu->title;
-      }
-    }
-    return $menus;
-  }
-
-  /**
    * Add/update navigation record.
    *
    * @param array $params Submitted values
@@ -487,11 +466,14 @@ ORDER BY parent_id, weight";
       if (substr($url, 0, 4) !== 'http') {
         //CRM-7656 --make sure to separate out url path from url params,
         //as we'r going to validate url path across cross-site scripting.
-        $urlParam = explode('?', $url);
-        if (empty($urlParam[1])) {
-          $urlParam[1] = NULL;
+        $parsedUrl = parse_url($url);
+        if (empty($parsedUrl['query'])) {
+          $parsedUrl['query'] = NULL;
         }
-        $url = CRM_Utils_System::url($urlParam[0], $urlParam[1], FALSE, NULL, TRUE);
+        if (empty($parsedUrl['fragment'])) {
+          $parsedUrl['fragment'] = NULL;
+        }
+        $url = CRM_Utils_System::url($parsedUrl['path'], $parsedUrl['query'], FALSE, $parsedUrl['fragment'], TRUE);
       }
       elseif (strpos($url, '&amp;') === FALSE) {
         $url = htmlspecialchars($url);

@@ -897,7 +897,6 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
   public function callAPISuccessGetSingle($entity, $params, $checkAgainst = NULL) {
     $params += array(
       'version' => $this->_apiversion,
-      'debug' => 1,
     );
     $result = $this->civicrm_api($entity, 'getsingle', $params);
     if (!is_array($result) || !empty($result['is_error']) || isset($result['values'])) {
@@ -1952,12 +1951,15 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
   /**
    * @param array $params
    *   Optional parameters.
+   * @param bool $reloadConfig
+   *   While enabling CiviCampaign component, we shouldn't always forcibly
+   *    reload config as this hinder hook call in test environment
    *
    * @return int
    *   Campaign ID.
    */
-  public function campaignCreate($params = array()) {
-    $this->enableCiviCampaign();
+  public function campaignCreate($params = array(), $reloadConfig = TRUE) {
+    $this->enableCiviCampaign($reloadConfig);
     $campaign = $this->callAPISuccess('campaign', 'create', array_merge(array(
       'name' => 'big_campaign',
       'title' => 'Campaign',
@@ -2248,11 +2250,16 @@ class CiviUnitTestCase extends PHPUnit_Extensions_Database_TestCase {
 
   /**
    * Enable CiviCampaign Component.
+   *
+   * @param bool $reloadConfig
+   *    Force relaod config or not
    */
-  public function enableCiviCampaign() {
+  public function enableCiviCampaign($reloadConfig = TRUE) {
     CRM_Core_BAO_ConfigSetting::enableComponent('CiviCampaign');
-    // force reload of config object
-    $config = CRM_Core_Config::singleton(TRUE, TRUE);
+    if ($reloadConfig) {
+      // force reload of config object
+      $config = CRM_Core_Config::singleton(TRUE, TRUE);
+    }
     //flush cache by calling with reset
     $activityTypes = CRM_Core_PseudoConstant::activityType(TRUE, TRUE, TRUE, 'name', TRUE);
   }
@@ -3887,6 +3894,24 @@ AND    ( TABLE_NAME LIKE 'civicrm_value_%' )
       $query = "UPDATE civicrm_participant SET source = 'Post Hook Update' WHERE id = %1";
       CRM_Core_DAO::executeQuery($query, $params);
     }
+  }
+
+
+  /**
+   * Instantiate form object.
+   *
+   * We need to instantiate the form to run preprocess, which means we have to trick it about the request method.
+   *
+   * @param string $class
+   *   Name of form class.
+   *
+   * @return \CRM_Core_Form
+   */
+  public function getFormObject($class) {
+    $form = new $class();
+    $_SERVER['REQUEST_METHOD'] = 'GET';
+    $form->controller = new CRM_Core_Controller();
+    return $form;
   }
 
 }

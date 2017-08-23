@@ -75,7 +75,9 @@ class CRM_Case_BAO_Case extends CRM_Case_DAO_Case {
   public static function add(&$params) {
     $caseDAO = new CRM_Case_DAO_Case();
     $caseDAO->copyValues($params);
-    return $caseDAO->save();
+    $result = $caseDAO->save();
+    $caseDAO->find(TRUE); // Get other case values (required by XML processor), this adds to $result array
+    return $result;
   }
 
   /**
@@ -271,6 +273,7 @@ WHERE civicrm_case.id = %1";
     $caseContact->case_id = $caseId;
     $caseContact->find();
     $contactArray = array();
+    // FIXME: Why does this return a 1-based array?
     $count = 1;
     while ($caseContact->fetch()) {
       if ($contactID != $caseContact->contact_id) {
@@ -3135,6 +3138,17 @@ WHERE id IN (' . implode(',', $copiedActivityIds) . ')';
       // This field is not part of this object but the api supports it
       case 'medium_id':
         $className = 'CRM_Activity_BAO_Activity';
+        break;
+
+      // Filter status id by case type id
+      case 'status_id':
+        if (!empty($props['case_type_id'])) {
+          $idField = is_numeric($props['case_type_id']) ? 'id' : 'name';
+          $caseType = civicrm_api3('CaseType', 'getsingle', array($idField => $props['case_type_id'], 'return' => 'definition'));
+          if (!empty($caseType['definition']['statuses'])) {
+            $params['condition'] = 'v.name IN ("' . implode('","', $caseType['definition']['statuses']) . '")';
+          }
+        }
         break;
     }
     return CRM_Core_PseudoConstant::get($className, $fieldName, $params, $context);
