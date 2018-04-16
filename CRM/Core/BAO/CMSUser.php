@@ -3,7 +3,7 @@
  +--------------------------------------------------------------------+
  | CiviCRM version 4.7                                                |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2017                                |
+ | Copyright CiviCRM LLC (c) 2004-2018                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -28,7 +28,7 @@
 /**
  *
  * @package CRM
- * @copyright CiviCRM LLC (c) 2004-2017
+ * @copyright CiviCRM LLC (c) 2004-2018
  */
 
 /**
@@ -127,7 +127,7 @@ class CRM_Core_BAO_CMSUser {
         $form->assign('isCMS', $required);
         if (!$userID || $action & CRM_Core_Action::PREVIEW || $action & CRM_Core_Action::PROFILE) {
           $form->add('text', 'cms_name', ts('Username'), NULL, $required);
-          if (($isDrupal && !variable_get('user_email_verification', TRUE)) OR ($isJoomla) OR ($isWordPress)) {
+          if ($config->userSystem->isPasswordUserGenerated()) {
             $form->add('password', 'cms_pass', ts('Password'));
             $form->add('password', 'cms_confirm_pass', ts('Confirm Password'));
           }
@@ -197,7 +197,7 @@ class CRM_Core_BAO_CMSUser {
         $errors[$emailName] = ts('Please specify a valid email address.');
       }
 
-      if (($isDrupal && !variable_get('user_email_verification', TRUE)) OR ($isJoomla) OR ($isWordPress)) {
+      if ($config->userSystem->isPasswordUserGenerated()) {
         if (empty($fields['cms_pass']) ||
           empty($fields['cms_confirm_pass'])
         ) {

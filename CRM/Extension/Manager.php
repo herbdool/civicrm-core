@@ -3,7 +3,7 @@
  +--------------------------------------------------------------------+
  | CiviCRM version 4.7                                                |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2017                                |
+ | Copyright CiviCRM LLC (c) 2004-2018                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -30,7 +30,7 @@
  * uninstalling extensions.
  *
  * @package CRM
- * @copyright CiviCRM LLC (c) 2004-2017
+ * @copyright CiviCRM LLC (c) 2004-2018
  */
 class CRM_Extension_Manager {
   /**
@@ -610,7 +610,7 @@ class CRM_Extension_Manager {
       $info = @$infos[$key];
 
       if ($this->getStatus($key) === self::STATUS_INSTALLED) {
-        $sorter->add($key, $info->requires);
+        $sorter->add($key, array());
       }
       elseif ($info && $info->requires) {
         $sorter->add($key, $info->requires);

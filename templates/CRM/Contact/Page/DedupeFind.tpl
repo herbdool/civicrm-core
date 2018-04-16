@@ -2,7 +2,7 @@
  +--------------------------------------------------------------------+
  | CiviCRM version 4.7                                                |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2017                                |
+ | Copyright CiviCRM LLC (c) 2004-2018                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -181,10 +181,6 @@
       }
     });
     $(function($) {
-      $('.button').click(function() {
-        // no unsaved changes confirmation dialogs
-        $('[data-warn-changes=true]').attr('data-warn-changes', 'false');
-      });
 
       var sourceUrl = {/literal}'{$sourceUrl}'{literal};
       var context   = {/literal}'{$context}'{literal};
@@ -328,6 +324,9 @@
       var is_selected = CRM.$('.crm-dedupe-select-all').prop('checked') ? 1 : 0;
     }
 
+    var criteria = {/literal}'{$criteria|escape}'{literal};
+    criteria  = criteria.length > 0 ? criteria : 0;
+
     var dataUrl = {/literal}"{crmURL p='civicrm/ajax/toggleDedupeSelect' h=0 q='snippet=4'}"{literal};
     var rgid = {/literal}"{$rgid}"{literal};
     var gid = {/literal}"{$gid}"{literal};
@@ -335,7 +334,7 @@
     rgid = rgid.length > 0 ? rgid : 0;
     gid  = gid.length > 0 ? gid : 0;
 
-    CRM.$.post(dataUrl, {pnid: id, rgid: rgid, gid: gid, is_selected: is_selected}, function (data) {
+    CRM.$.post(dataUrl, {pnid: id, rgid: rgid, gid: gid, is_selected: is_selected, criteria : criteria}, function (data) {
       // nothing to do for now
     }, 'json');
   }

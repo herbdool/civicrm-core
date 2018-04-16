@@ -4,10 +4,11 @@ Required vars: caseTypes
 -->
 <h1 crm-page-title>{{ts('Case Types')}}</h1>
 
+<div class="help">
+  {{ts('A Case Type describes a group of related tasks, interactions, or processes.')}}
+</div>
+
 <div class="crm-content-block crm-block">
-  <div class="help">
-    {{ts('A Case Type describes a group of related tasks, interactions, or processes.')}}
-  </div>
 
   <table class="display">
     <thead>
@@ -42,7 +43,7 @@ Required vars: caseTypes
                   {{ts('Enable')}}
                 </a>
               </li>
-              <li ng-show="caseType.is_active">
+              <li ng-show="caseType.is_active && !caseType.is_reserved">
                 <a class="action-item crm-hover-button"
                    crm-confirm="{type: 'disable', obj: caseType}"
                    on-yes="toggleCaseType(caseType)">
@@ -56,7 +57,7 @@ Required vars: caseTypes
                   {{ts('Revert')}}
                 </a>
               </li>
-              <li>
+              <li ng-show="!caseType.is_reserved">
                 <a class="action-item crm-hover-button"
                    crm-confirm="{type: 'delete', obj: caseType}"
                    on-yes="deleteCaseType(caseType)">
