@@ -284,4 +284,47 @@ class CRM_Core_BAO_NavigationTest extends CiviUnitTestCase {
     $this->assertEquals(100, $output[10]['child'][101]['child'][100]['attributes']['navID']);
   }
 
+  /**
+   * Tests that permissions and component status are checked with the correct operator.
+   */
+  public function testCheckPermissions() {
+    $menuItem = [
+      'permission' => 'access CiviCRM, access CiviContribute',
+      'operator' => 'AND',
+    ];
+    CRM_Core_BAO_ConfigSetting::enableComponent('CiviContribute');
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviCRM', 'access CiviContribute'];
+    $this->assertTrue(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+
+    CRM_Core_BAO_ConfigSetting::disableComponent('CiviContribute');
+    $this->assertFalse(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+
+    CRM_Core_BAO_ConfigSetting::enableComponent('CiviContribute');
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviContribute'];
+    $this->assertFalse(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+
+    $menuItem['operator'] = 'OR';
+    $this->assertTrue(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+
+    CRM_Core_BAO_ConfigSetting::disableComponent('CiviContribute');
+    $this->assertFalse(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+
+    CRM_Core_BAO_ConfigSetting::enableComponent('CiviMail');
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviMail', 'delete in CiviMail'];
+    $menuItem = [
+      'permission' => 'access CiviMail, delete in CiviMail',
+      'operator' => 'AND',
+    ];
+    $this->assertTrue(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+    $menuItem['operator'] = 'OR';
+    $this->assertTrue(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = ['delete in CiviMail'];
+    $this->assertTrue(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviCRM'];
+    $this->assertFalse(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = ['access CiviMail', 'delete in CiviMail'];
+    CRM_Core_BAO_ConfigSetting::disableComponent('CiviMail');
+    $this->assertFalse(CRM_Core_BAO_Navigation::checkPermission($menuItem));
+  }
+
 }

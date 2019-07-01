@@ -42,14 +42,47 @@ class CRM_Core_BAO_CustomQueryTest extends CiviUnitTestCase {
     // Assigning the relevant form value to be within a custom key is normally done in
     // build field params. It would be better if it were all done in convertFormValues
     // but for now we just imitate it.
-    $params[$dateCustomField['id']] = CRM_Contact_BAO_Query::convertFormValues($formValues);
-    $queryObj = new CRM_Core_BAO_CustomQuery($params);
-    $queryObj->Query();
+
+    $params = CRM_Contact_BAO_Query::convertFormValues($formValues);
+    $queryObj = new CRM_Contact_BAO_Query($params);
     $this->assertEquals(
-      'civicrm_value_testsearchcus_1.date_field_2 BETWEEN "' . date('Y') . '0101000000" AND "' . date('Y') . '1231235959"',
+      "civicrm_value_testsearchcus_1.date_field_2 BETWEEN '" . date('Y') . "0101000000' AND '" . date('Y') . "1231235959'",
       $queryObj->_where[0][0]
     );
-    $this->assertEquals($queryObj->_qill[0][0], "date field BETWEEN 'January 1st, " . date('Y') . " 12:00 AM AND December 31st, " . date('Y') . " 11:59 PM'");
+    $this->assertEquals("date field is This calendar year (between January 1st, " . date('Y') . " 12:00 AM and December 31st, " . date('Y') . " 11:59 PM)", $queryObj->_qill[0][0]);
+    $queryObj = new CRM_Core_BAO_CustomQuery($params);
+    $this->assertEquals([
+      'id' => $dateCustomField['id'],
+      'label' => 'date field',
+      'extends' => 'Contact',
+      'data_type' => 'Date',
+      'html_type' => 'Select Date',
+      'is_search_range' => '0',
+      'column_name' => 'date_field_' . $dateCustomField['id'],
+      'table_name' => 'civicrm_value_testsearchcus_' . $ids['custom_group_id'],
+      'option_group_id' => NULL,
+      'groupTitle' => 'testSearchCustomDataDateRelative',
+      'default_value' => NULL,
+      'text_length' => NULL,
+      'options_per_line' => NULL,
+      'custom_group_id' => '1',
+      'extends_entity_column_value' => NULL,
+      'extends_entity_column_id' => NULL,
+      'is_view' => '0',
+      'is_multiple' => '0',
+      'date_format' => 'mm/dd/yy',
+      'time_format' => NULL,
+      'is_required' => '0',
+      'extends_table' => 'civicrm_contact',
+      'search_table' => 'contact_a',
+      'headerPattern' => '//',
+      'title' => 'date field',
+      'custom_field_id' => $dateCustomField['id'],
+      'name' => 'custom_' . $dateCustomField['id'],
+      'type' => 4,
+      'where' => 'civicrm_value_testsearchcus_' . $ids['custom_group_id'] . '.date_field_' . $dateCustomField['id'],
+    ], $queryObj->getFields()[$dateCustomField['id']]);
+
   }
 
   /**

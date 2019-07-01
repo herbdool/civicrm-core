@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
-| CiviCRM version 4.7                                                |
+| CiviCRM version 5                                                  |
 +--------------------------------------------------------------------+
-| Copyright CiviCRM LLC (c) 2004-2018                                |
+| Copyright CiviCRM LLC (c) 2004-2019                                |
 +--------------------------------------------------------------------+
 | This file is a part of CiviCRM.                                    |
 |                                                                    |
@@ -79,6 +79,7 @@ class api_v3_PriceFieldTest extends CiviUnitTestCase {
     ));
 
     $this->assertAPISuccess($delete);
+    parent::tearDown();
   }
 
   public function testCreatePriceField() {

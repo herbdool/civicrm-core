@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -134,13 +134,6 @@ class CRM_Report_Form_TestCaseTest extends CiviReportTestCase {
     $this->quickCleanup($this->_tablesToTruncate);
   }
 
-  public function tearDown() {
-    parent::tearDown();
-    CRM_Core_DAO::executeQuery('DROP TEMPORARY TABLE IF EXISTS civireport_contribution_detail_temp1');
-    CRM_Core_DAO::executeQuery('DROP TEMPORARY TABLE IF EXISTS civireport_contribution_detail_temp2');
-    CRM_Core_DAO::executeQuery('DROP TEMPORARY TABLE IF EXISTS civireport_contribution_detail_temp3');
-  }
-
   /**
    * @dataProvider dataProvider
    * @param $reportClass
@@ -161,7 +154,6 @@ class CRM_Report_Form_TestCaseTest extends CiviReportTestCase {
   }
 
   /**
-   * @expectedException PHPUnit_Framework_AssertionFailedError
    * @dataProvider badDataProvider
    * @param $reportClass
    * @param $inputParams
@@ -177,7 +169,15 @@ class CRM_Report_Form_TestCaseTest extends CiviReportTestCase {
     $reportCsvArray = $this->getArrayFromCsv($reportCsvFile);
 
     $expectedOutputCsvArray = $this->getArrayFromCsv(dirname(__FILE__) . "/{$expectedOutputCsvFile}");
-    $this->assertCsvArraysEqual($expectedOutputCsvArray, $reportCsvArray);
+    try {
+      $this->assertCsvArraysEqual($expectedOutputCsvArray, $reportCsvArray);
+    }
+    catch (PHPUnit\Framework\AssertionFailedError $e) {
+      /* OK */
+    }
+    catch (PHPUnit_Framework_AssertionFailedError $e) {
+      /* OK */
+    }
   }
 
   /**

@@ -7,8 +7,9 @@
 class CRM_Group_Page_AjaxTest extends CiviUnitTestCase {
   /**
    * Permissioned group is used both as an active group the contact can see and as a group that allows
-   * logged in user to see contacts
-   * @var integer
+   * logged in user to see contacts.
+   *
+   * @var int
    */
   protected $_permissionedGroup;
   /**
@@ -38,15 +39,15 @@ class CRM_Group_Page_AjaxTest extends CiviUnitTestCase {
     $this->hookClass = CRM_Utils_Hook::singleton();
     $this->createLoggedInUser();
     $this->_permissionedDisabledGroup = $this->groupCreate(array(
-        'title' => 'pick-me-disabled',
-        'is_active' => 0,
-        'name' => 'pick-me-disabled',
-      ));
+      'title' => 'pick-me-disabled',
+      'is_active' => 0,
+      'name' => 'pick-me-disabled',
+    ));
     $this->_permissionedGroup = $this->groupCreate(array(
-        'title' => 'pick-me-active',
-        'is_active' => 1,
-        'name' => 'pick-me-active',
-      ));
+      'title' => 'pick-me-active',
+      'is_active' => 1,
+      'name' => 'pick-me-active',
+    ));
     $this->groupCreate(array('title' => 'not-me-disabled', 'is_active' => 0, 'name' => 'not-me-disabled'));
     $this->groupCreate(array('title' => 'not-me-active', 'is_active' => 1, 'name' => 'not-me-active'));
   }
@@ -125,16 +126,16 @@ class CRM_Group_Page_AjaxTest extends CiviUnitTestCase {
     $params = $this->_params;
     $groups = CRM_Contact_BAO_Group::getGroupListSelector($params);
     $this->assertEquals(2, $groups['recordsTotal']);
-    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=4" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a></span>', $groups['data'][0]['links']);
-    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=2" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a></span>', $groups['data'][1]['links']);
+    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=4&amp;component_mode=1" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a></span>', $groups['data'][0]['links']);
+    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=2&amp;component_mode=1" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a></span>', $groups['data'][1]['links']);
 
     // as per changes made in PR-6822
     $this->setPermissionAndRequest(array('view all contacts', 'edit groups'));
     $params = $this->_params;
     $groups = CRM_Contact_BAO_Group::getGroupListSelector($params);
     $this->assertEquals(2, $groups['recordsTotal']);
-    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=4" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=update&amp;id=4" class="action-item crm-hover-button" title=\'Edit Group\' >Settings</a></span><span class=\'btn-slide crm-hover-button\'>more<ul class=\'panel\'><li><a href="#" class="action-item crm-hover-button crm-enable-disable" title=\'Disable Group\' >Disable</a></li><li><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=delete&amp;id=4" class="action-item crm-hover-button small-popup" title=\'Delete Group\' >Delete</a></li></ul></span>', $groups['data'][0]['links']);
-    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=2" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=update&amp;id=2" class="action-item crm-hover-button" title=\'Edit Group\' >Settings</a></span><span class=\'btn-slide crm-hover-button\'>more<ul class=\'panel\'><li><a href="#" class="action-item crm-hover-button crm-enable-disable" title=\'Disable Group\' >Disable</a></li><li><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=delete&amp;id=2" class="action-item crm-hover-button small-popup" title=\'Delete Group\' >Delete</a></li></ul></span>', $groups['data'][1]['links']);
+    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=4&amp;component_mode=1" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=update&amp;id=4" class="action-item crm-hover-button" title=\'Edit Group\' >Settings</a></span><span class=\'btn-slide crm-hover-button\'>more<ul class=\'panel\'><li><a href="#" class="action-item crm-hover-button crm-enable-disable" title=\'Disable Group\' >Disable</a></li><li><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=delete&amp;id=4" class="action-item crm-hover-button small-popup" title=\'Delete Group\' >Delete</a></li></ul></span>', $groups['data'][0]['links']);
+    $this->assertEquals('<span><a href="/index.php?q=civicrm/group/search&amp;reset=1&amp;force=1&amp;context=smog&amp;gid=2&amp;component_mode=1" class="action-item crm-hover-button" title=\'Group Contacts\' >Contacts</a><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=update&amp;id=2" class="action-item crm-hover-button" title=\'Edit Group\' >Settings</a></span><span class=\'btn-slide crm-hover-button\'>more<ul class=\'panel\'><li><a href="#" class="action-item crm-hover-button crm-enable-disable" title=\'Disable Group\' >Disable</a></li><li><a href="/index.php?q=civicrm/group&amp;reset=1&amp;action=delete&amp;id=2" class="action-item crm-hover-button small-popup" title=\'Delete Group\' >Delete</a></li></ul></span>', $groups['data'][1]['links']);
   }
 
   /**
@@ -241,7 +242,6 @@ class CRM_Group_Page_AjaxTest extends CiviUnitTestCase {
     $this->assertEquals('pick-me-active', $groups['data'][2]['title']);
     $this->assertEquals('pick-me-disabled', $groups['data'][3]['title']);
   }
-
 
   /**
    * Retrieve groups as 'view all contacts'
@@ -442,7 +442,6 @@ class CRM_Group_Page_AjaxTest extends CiviUnitTestCase {
     $this->assertEquals(0, count($groups['data']), 'Returned groups should exclude disabled by default');
     $this->assertEquals(0, $groups['recordsTotal'], 'Total needs to be set correctly');
   }
-
 
   /**
    * ACL Group hook.
@@ -648,6 +647,62 @@ class CRM_Group_Page_AjaxTest extends CiviUnitTestCase {
     else {
       $currentGroups = $groups;
     }
+  }
+
+  public function testEditAllGroupsACL() {
+    $this->setupEditAllGroupsACL();
+    $params = $this->_params;
+    $groups = CRM_Contact_BAO_Group::getGroupListSelector($params);
+    $this->assertNotEmpty($groups, 'If Edit All Groups is granted, at least one group should be visible');
+  }
+
+  /**
+   * Set up an acl allowing Authenticated contacts to Edit All Groups
+   *
+   *  You need to have pre-created these groups & created the user e.g
+   *  $this->createLoggedInUser();
+   *
+   */
+  public function setupEditAllGroupsACL() {
+    global $_REQUEST;
+    $_REQUEST = $this->_params;
+
+    CRM_Core_Config::singleton()->userPermissionClass->permissions = array('access CiviCRM');
+    $optionGroupID = $this->callAPISuccessGetValue('option_group', array('return' => 'id', 'name' => 'acl_role'));
+    $ov = new CRM_Core_DAO_OptionValue();
+    $ov->option_group_id = $optionGroupID;
+    $ov->value = 55;
+    if ($ov->find(TRUE)) {
+      CRM_Core_DAO::executeQuery("DELETE FROM civicrm_option_value WHERE id = {$ov->id}");
+    }
+    $optionValue = $this->callAPISuccess('option_value', 'create', array(
+      'option_group_id' => $optionGroupID,
+      'label' => 'groupmaster',
+      'value' => 55,
+    ));
+    $groupId = $this->groupCreate(['name' => 'groupmaster group']);
+    // Assign groupmaster to groupmaster group in civicrm_acl_entity_role
+    CRM_Core_DAO::executeQuery("
+      INSERT INTO civicrm_acl_entity_role (
+      `acl_role_id`, `entity_table`, `entity_id`, `is_active`
+      ) VALUES (55, 'civicrm_group', $groupId, 1);
+    ");
+    // Put the user into this group
+    $this->_loggedInUser = CRM_Core_Session::singleton()->get('userID');
+    $this->callAPISuccess('group_contact', 'create', array(
+      'group_id' => $groupId,
+      'contact_id' => $this->_loggedInUser,
+    ));
+    // Add the ACL
+    CRM_Core_DAO::executeQuery("
+      INSERT INTO civicrm_acl (
+      `name`, `entity_table`, `entity_id`, `operation`, `object_table`, `object_id`, `is_active`
+      )
+      VALUES (
+      'core-580', 'civicrm_acl_role', 55, 'Edit', 'civicrm_saved_search', 0, 1
+      );
+      ");
+
   }
 
 }

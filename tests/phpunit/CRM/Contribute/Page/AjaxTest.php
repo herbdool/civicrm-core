@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -138,6 +138,7 @@ class CRM_Contribute_Page_AjaxTest extends CiviUnitTestCase {
       'financial_type_id' => 2,
       'status_id' => 1,
       'total_amount' => 100,
+      'receive_date' => '2018-06-08',
       'soft_credit' => array(
         'soft_credit_type_id' => 11,
         'contact_id' => $this->_softContactId,

@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -33,12 +33,14 @@
  * @group headless
  */
 class api_v3_UFGroupTest extends CiviUnitTestCase {
-  // ids from the uf_group_test.xml fixture
+  /**
+   * ids from the uf_group_test.xml fixture
+   * @var int
+   */
   protected $_ufGroupId;
   protected $_ufFieldId;
   protected $_contactId;
   protected $_groupId;
-  protected $_apiversion = 3;
   protected $params;
 
   protected function setUp() {
@@ -96,9 +98,11 @@ class api_v3_UFGroupTest extends CiviUnitTestCase {
   }
 
   /**
-   * Updating group.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testUpdateUFGroup() {
+  public function testUpdateUFGroup($version) {
+    $this->_apiversion = $version;
     $params = array(
       'title' => 'Edited Test Profile',
       'help_post' => 'Profile Pro help text.',
@@ -112,8 +116,12 @@ class api_v3_UFGroupTest extends CiviUnitTestCase {
     }
   }
 
-  public function testUFGroupCreate() {
-
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testUFGroupCreate($version) {
+    $this->_apiversion = $version;
     $result = $this->callAPIAndDocument('uf_group', 'create', $this->params, __FUNCTION__, __FILE__);
     $this->assertAPISuccess($result);
     $this->assertEquals($result['values'][$result['id']]['add_to_group_id'], $this->params['add_contact_to_group']);
@@ -129,11 +137,21 @@ class api_v3_UFGroupTest extends CiviUnitTestCase {
     }
   }
 
-  public function testUFGroupCreateWithWrongParams() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testUFGroupCreateWithWrongParams($version) {
+    $this->_apiversion = $version;
     $result = $this->callAPIFailure('uf_group', 'create', array('name' => 'A title-less group'));
   }
 
-  public function testUFGroupUpdate() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testUFGroupUpdate($version) {
+    $this->_apiversion = $version;
     $params = array(
       'id' => $this->_ufGroupId,
       'add_captcha' => 1,
@@ -170,7 +188,12 @@ class api_v3_UFGroupTest extends CiviUnitTestCase {
     $this->assertEquals($result['values'][$result['id']]['limit_listings_group_id'], $params['group']);
   }
 
-  public function testUFGroupGet() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testUFGroupGet($version) {
+    $this->_apiversion = $version;
     $result = $this->callAPISuccess('uf_group', 'create', $this->params);
     $params = array('id' => $result['id']);
     $result = $this->callAPIAndDocument('uf_group', 'get', $params, __FUNCTION__, __FILE__);
@@ -183,15 +206,29 @@ class api_v3_UFGroupTest extends CiviUnitTestCase {
       }
       $expected = $this->params[$key];
       $received = $result['values'][$result['id']][$key];
+      // Api4 auto-splits serialized fields, v3 sometimes does but not in this case
+      if ($version == 4 && is_array($received)) {
+        $received = implode(',', $received);
+      }
       $this->assertEquals($expected, $received, "The string '$received' does not equal '$expected' for key '$key' in line " . __LINE__);
     }
   }
 
-  public function testUFGroupUpdateWithEmptyParams() {
-    $result = $this->callAPIFailure('uf_group', 'create', array(), 'Mandatory key(s) missing from params array: title');
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testUFGroupUpdateWithEmptyParams($version) {
+    $this->_apiversion = $version;
+    $result = $this->callAPIFailure('uf_group', 'create', [], 'title');
   }
 
-  public function testUFGroupDelete() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testUFGroupDelete($version) {
+    $this->_apiversion = $version;
     $ufGroup = $this->callAPISuccess('uf_group', 'create', $this->params);
     $params = array('id' => $ufGroup['id']);
     $this->assertEquals(1, $this->callAPISuccess('uf_group', 'getcount', $params), "in line " . __LINE__);

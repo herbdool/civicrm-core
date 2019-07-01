@@ -9,13 +9,13 @@ namespace Civi\Test;
  *
  * @group headless
  */
-class ExampleTransactionalTest extends \PHPUnit_Framework_TestCase implements HeadlessInterface, TransactionalInterface {
+class ExampleTransactionalTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, TransactionalInterface {
 
   /**
    * @var array
    *   Array(int $id).
    */
-  static $contactIds = array();
+  protected static $contactIds = array();
 
   public function setUpHeadless() {
     return \Civi\Test::headless()->apply();

@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
-| CiviCRM version 4.7                                                |
+| CiviCRM version 5                                                  |
 +--------------------------------------------------------------------+
-| Copyright CiviCRM LLC (c) 2004-2018                                |
+| Copyright CiviCRM LLC (c) 2004-2019                                |
 +--------------------------------------------------------------------+
 | This file is a part of CiviCRM.                                    |
 |                                                                    |
@@ -30,14 +30,12 @@
  * @group headless
  */
 class api_v3_EmailTest extends CiviUnitTestCase {
-  protected $_apiversion;
   protected $_contactID;
   protected $_locationType;
   protected $_entity;
   protected $_params;
 
   public function setUp() {
-    $this->_apiversion = 3;
     $this->_entity = 'Email';
     parent::setUp();
     $this->useTransaction(TRUE);
@@ -60,7 +58,12 @@ class api_v3_EmailTest extends CiviUnitTestCase {
     );
   }
 
-  public function testCreateEmail() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testCreateEmail($version) {
+    $this->_apiversion = $version;
     $params = $this->_params;
     //check there are no emails to start with
     $get = $this->callAPISuccess('email', 'get', array(
@@ -76,25 +79,49 @@ class api_v3_EmailTest extends CiviUnitTestCase {
   }
 
   /**
+   * If no location is specified when creating a new email, it should default to
+   * the LocationType default
+   *
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testCreateEmailDefaultLocation($version) {
+    $this->_apiversion = $version;
+    $params = $this->_params;
+    unset($params['location_type_id']);
+    $result = $this->callAPIAndDocument('email', 'create', $params, __FUNCTION__, __FILE__);
+    $this->assertEquals(CRM_Core_BAO_LocationType::getDefault()->id, $result['values'][$result['id']]['location_type_id']);
+    $delresult = $this->callAPISuccess('email', 'delete', array('id' => $result['id']));
+  }
+
+  /**
    * If a new email is set to is_primary the prev should no longer be.
    *
    * If is_primary is not set then it should become is_primary is no others exist
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testCreateEmailPrimaryHandlingChangeToPrimary() {
+  public function testCreateEmailPrimaryHandlingChangeToPrimary($version) {
+    $this->_apiversion = $version;
     $params = $this->_params;
     unset($params['is_primary']);
     $email1 = $this->callAPISuccess('email', 'create', $params);
     //now we check & make sure it has been set to primary
     $expected = 1;
     $check = $this->callAPISuccess('email', 'getcount', array(
-        'is_primary' => 1,
-        'id' => $email1['id'],
-      ),
+      'is_primary' => 1,
+      'id' => $email1['id'],
+    ),
       $expected
     );
   }
 
-  public function testCreateEmailPrimaryHandlingChangeExisting() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testCreateEmailPrimaryHandlingChangeExisting($version) {
+    $this->_apiversion = $version;
     $email1 = $this->callAPISuccess('email', 'create', $this->_params);
     $email2 = $this->callAPISuccess('email', 'create', $this->_params);
     $check = $this->callAPISuccess('email', 'getcount', array(
@@ -104,13 +131,23 @@ class api_v3_EmailTest extends CiviUnitTestCase {
     $this->assertEquals(1, $check);
   }
 
-  public function testCreateEmailWithoutEmail() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testCreateEmailWithoutEmail($version) {
+    $this->_apiversion = $version;
     $result = $this->callAPIFailure('Email', 'Create', array('contact_id' => 4));
     $this->assertContains('missing', $result['error_message']);
     $this->assertContains('email', $result['error_message']);
   }
 
-  public function testGetEmail() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testGetEmail($version) {
+    $this->_apiversion = $version;
     $result = $this->callAPISuccess('email', 'create', $this->_params);
     $get = $this->callAPISuccess('email', 'create', $this->_params);
     $this->assertEquals($get['count'], 1);
@@ -121,7 +158,12 @@ class api_v3_EmailTest extends CiviUnitTestCase {
     $delresult = $this->callAPISuccess('email', 'delete', array('id' => $result['id']));
   }
 
-  public function testDeleteEmail() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testDeleteEmail($version) {
+    $this->_apiversion = $version;
     $params = array(
       'contact_id' => $this->_contactID,
       'location_type_id' => $this->_locationType->id,
@@ -147,7 +189,12 @@ class api_v3_EmailTest extends CiviUnitTestCase {
     $this->assertEquals(0, $get['count'], 'Contact not successfully deleted In line ' . __LINE__);
   }
 
-  public function testReplaceEmail() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testReplaceEmail($version) {
+    $this->_apiversion = $version;
     // check there are no emails to start with
     $get = $this->callAPISuccess('email', 'get', array(
       'contact_id' => $this->_contactID,
@@ -240,7 +287,12 @@ class api_v3_EmailTest extends CiviUnitTestCase {
     $this->assertEquals(0, $get['count'], 'Incorrect email count at ' . __LINE__);
   }
 
-  public function testReplaceEmailsInChain() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testReplaceEmailsInChain($version) {
+    $this->_apiversion = $version;
     // check there are no emails to start with
     $get = $this->callAPISuccess('email', 'get', array(
 
@@ -326,7 +378,12 @@ class api_v3_EmailTest extends CiviUnitTestCase {
     $this->assertEquals(2, $get['count'], 'Incorrect email count at ' . __LINE__);
   }
 
-  public function testReplaceEmailWithId() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testReplaceEmailWithId($version) {
+    $this->_apiversion = $version;
     // check there are no emails to start with
     $get = $this->callAPISuccess('email', 'get', array(
       'contact_id' => $this->_contactID,

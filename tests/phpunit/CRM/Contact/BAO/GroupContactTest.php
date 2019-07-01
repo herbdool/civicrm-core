@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -91,6 +91,8 @@ class CRM_Contact_BAO_GroupContactTest extends CiviUnitTestCase {
 
   /**
    *  Test case for contact search: CRM-6706, CRM-6586 Parent Group search should return contacts from child groups too.
+   *
+   * @throws \Exception
    */
   public function testContactSearchByParentGroup() {
     // create a parent group
@@ -146,7 +148,7 @@ class CRM_Contact_BAO_GroupContactTest extends CiviUnitTestCase {
     $childContactParams = array(
       'first_name' => 'Child1 Fname',
       'last_name' => 'Child2 Lname',
-      'group' => array($childGroup['id'] => 1),
+      'group' => [$childGroup['id'] => 1],
     );
     $childContact = $this->individualCreate($childContactParams);
 
@@ -191,7 +193,6 @@ class CRM_Contact_BAO_GroupContactTest extends CiviUnitTestCase {
     $this->callAPISuccess('Contact', 'delete', array('id' => $childContact));
     $this->callAPISuccess('Contact', 'delete', array('id' => $childSmartGroupContact));
   }
-
 
   /**
    *  CRM-19698: Test case for combine contact search in regular and smart group

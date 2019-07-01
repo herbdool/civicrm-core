@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -50,12 +50,12 @@ class api_v3_MembershipStatusTest extends CiviUnitTestCase {
 
   public function tearDown() {
     $this->membershipStatusDelete($this->_membershipStatusID);
-    $this->membershipTypeDelete(array('id' => $this->_membershipTypeID));
+    $this->membershipTypeDelete(['id' => $this->_membershipTypeID]);
     $this->contactDelete($this->_contactID);
+    parent::tearDown();
   }
 
   ///////////////// civicrm_membership_status_get methods
-
 
   /**
    * Test civicrm_membership_status_get with empty params.
@@ -129,7 +129,6 @@ class api_v3_MembershipStatusTest extends CiviUnitTestCase {
     $this->assertEquals('renamed', $result['values'][$id]['name']);
     $this->membershipStatusDelete($result['id']);
   }
-
 
   ///////////////// civicrm_membership_status_delete methods
 

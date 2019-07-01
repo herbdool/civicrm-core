@@ -5,10 +5,24 @@
  */
 class CRM_Contact_Page_AjaxTest extends CiviUnitTestCase {
 
+  /**
+   * Original $_REQUEST
+   *
+   * We are messing with globals so fix afterwards.
+   *
+   * @var array
+   */
+  protected $originalRequest = [];
 
   public function setUp() {
     $this->useTransaction(TRUE);
     parent::setUp();
+    $this->originalRequest = $_REQUEST;
+  }
+
+  public function tearDown() {
+    $_REQUEST = $this->originalRequest;
+    parent::tearDown();
   }
 
   /**
@@ -30,6 +44,22 @@ class CRM_Contact_Page_AjaxTest extends CiviUnitTestCase {
     $_REQUEST['is_unit_test'] = TRUE;
     $result = CRM_Contact_Page_AJAX::getDedupes();
     $this->assertEquals(array('data' => array(), 'recordsTotal' => 0, 'recordsFiltered' => 0), $result);
+  }
+
+  /**
+   * Tests the 'guts' of the processDupes function.
+   *
+   * @throws \Exception
+   */
+  public function testProcessDupes() {
+    $contact1 = $this->individualCreate();
+    $contact2 = $this->individualCreate();
+    $contact3 = $this->individualCreate();
+    CRM_Contact_Page_AJAX::markNonDuplicates($contact1, $contact2, 'dupe-nondupe');
+    CRM_Contact_Page_AJAX::markNonDuplicates($contact3, $contact1, 'dupe-nondupe');
+    $this->callAPISuccessGetSingle('Exception', ['contact_id1' => $contact1, 'contact_id2' => $contact2]);
+    // Note that in saving the order is changed to have the lowest ID first.
+    $this->callAPISuccessGetSingle('Exception', ['contact_id1' => $contact1, 'contact_id2' => $contact3]);
   }
 
   public function testGetDedupesPostCode() {

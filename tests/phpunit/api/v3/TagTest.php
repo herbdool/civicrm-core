@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -35,12 +35,14 @@
 class api_v3_TagTest extends CiviUnitTestCase {
   protected $_apiversion = 3;
   /**
+   * @var array
    * @ids array of values to be cleaned up in the tear down
    */
   protected $ids = array();
   /**
    * Tag id.
-   * @var integer
+   *
+   * @var int
    */
   protected $tag = array();
 
@@ -54,10 +56,14 @@ class api_v3_TagTest extends CiviUnitTestCase {
   }
 
   ///////////////// civicrm_tag_get methods
+
   /**
    * Test civicrm_tag_get with wrong params.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testGetWrongParams() {
+  public function testGetWrongParams($version) {
+    $this->_apiversion = $version;
     $params = array('name' => 'Wrong Tag Name');
     $result = $this->callAPISuccess('tag', 'get', $params);
     $this->assertEquals(0, $result['count']);
@@ -65,8 +71,11 @@ class api_v3_TagTest extends CiviUnitTestCase {
 
   /**
    * Test civicrm_tag_get - success expected.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testGet() {
+  public function testGet($version) {
+    $this->_apiversion = $version;
     $params = array(
       'id' => $this->tagID,
       'name' => $this->tag['name'],
@@ -78,8 +87,11 @@ class api_v3_TagTest extends CiviUnitTestCase {
 
   /**
    * Test civicrm_tag_get - success expected.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testGetReturnArray() {
+  public function testGetReturnArray($version) {
+    $this->_apiversion = $version;
     $description = "Demonstrates use of Return as an array.";
     $subfile = "GetReturnArray";
 
@@ -97,15 +109,21 @@ class api_v3_TagTest extends CiviUnitTestCase {
 
   /**
    * Test civicrm_tag_create with empty params.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testCreateEmptyParams() {
-    $result = $this->callAPIFailure('tag', 'create', array(), 'Mandatory key(s) missing from params array: name');
+  public function testCreateEmptyParams($version) {
+    $this->_apiversion = $version;
+    $result = $this->callAPIFailure('tag', 'create', array(), 'name');
   }
 
   /**
    * Test civicrm_tag_create.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testCreatePasstagInParams() {
+  public function testCreatePasstagInParams($version) {
+    $this->_apiversion = $version;
     $params = array(
       'tag' => 10,
       'name' => 'New Tag23',
@@ -117,6 +135,7 @@ class api_v3_TagTest extends CiviUnitTestCase {
 
   /**
    * Test civicrm_tag_create - success expected.
+   * Skipping v4 because used_for is an array
    */
   public function testCreate() {
     $params = array(
@@ -133,6 +152,8 @@ class api_v3_TagTest extends CiviUnitTestCase {
    * Test civicrm_tag_create activity tag- success expected.
    *
    * Test checks that used_for is set and not over-written by default on update.
+   *
+   * Skipping v4 because used_for is an array
    */
   public function testCreateEntitySpecificTag() {
     $params = array(
@@ -149,19 +170,26 @@ class api_v3_TagTest extends CiviUnitTestCase {
     $params['used_for'] = 'civicrm_activity';
     $this->getAndCheck($params, $result['id'], 'tag', 1, __FUNCTION__ . ' tag updated in line ' . __LINE__);
   }
+
   ///////////////// civicrm_tag_delete methods
 
   /**
    * Test civicrm_tag_delete without tag id.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testDeleteWithoutTagId() {
-    $result = $this->callAPIFailure('tag', 'delete', array(), 'Mandatory key(s) missing from params array: id');
+  public function testDeleteWithoutTagId($version) {
+    $this->_apiversion = $version;
+    $result = $this->callAPIFailure('tag', 'delete', array());
   }
 
   /**
    * Test civicrm_tag_delete .
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testTagDeleteOldSyntax() {
+  public function testTagDeleteOldSyntax($version) {
+    $this->_apiversion = $version;
     $params = array(
       'tag_id' => $this->tagID,
     );
@@ -171,8 +199,11 @@ class api_v3_TagTest extends CiviUnitTestCase {
 
   /**
    * Test civicrm_tag_delete = $params['id'] is correct
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testTagDeleteCorrectSyntax() {
+  public function testTagDeleteCorrectSyntax($version) {
+    $this->_apiversion = $version;
     $params = array(
       'id' => $this->tagID,
     );

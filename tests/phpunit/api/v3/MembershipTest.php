@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -89,19 +89,10 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
    * @throws \Exception
    */
   public function tearDown() {
-    $this->quickCleanup(array(
-        'civicrm_membership',
-        'civicrm_membership_payment',
-        'civicrm_membership_log',
-        'civicrm_uf_match',
-      ),
-      TRUE
-    );
-    $this->membershipStatusDelete($this->_membershipStatusID);
-    $this->membershipTypeDelete(array('id' => $this->_membershipTypeID2));
-    $this->membershipTypeDelete(array('id' => $this->_membershipTypeID));
+    $this->quickCleanUpFinancialEntities();
+    $this->quickCleanup(['civicrm_uf_match'], TRUE);
     $this->contactDelete($this->_contactID);
-
+    parent::tearDown();
   }
 
   /**
@@ -137,8 +128,10 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
    * Test membership deletion and with the preserve contribution param.
    */
   public function testMembershipDeletePreserveContribution() {
-    $membershipID = $this->contactMembershipCreate($this->_params); //DELETE
-    $this->assertDBRowExist('CRM_Member_DAO_Membership', $membershipID); //DELETE
+    //DELETE
+    $membershipID = $this->contactMembershipCreate($this->_params);
+    //DELETE
+    $this->assertDBRowExist('CRM_Member_DAO_Membership', $membershipID);
     $ContributionCreate = $this->callAPISuccess('Contribution', 'create', array(
       'sequential' => 1,
       'financial_type_id' => "Member Dues",
@@ -388,7 +381,6 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
     $this->assertEquals($result['is_override'], 1);
   }
 
-
   /**
    * Test civicrm_membership_get with proper params.
    * Memberships expected.
@@ -456,6 +448,8 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
   /**
    * Test civicrm_membership_get with relationship.
    * get Memberships.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testGetWithRelationship() {
     $membershipOrgId = $this->organizationCreate(NULL);
@@ -631,6 +625,28 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
     $result = $this->callAPISuccess('membership', 'get', $params);
     $this->assertEquals(0, $result['count']);
 
+    //Create pay_later membership for organization.
+    $employerId[2] = $this->organizationCreate(array(), 1);
+    $params = array(
+      'contact_id' => $employerId[2],
+      'membership_type_id' => $membershipTypeId,
+      'source' => 'Test pay later suite',
+      'is_pay_later' => 1,
+      'status_id' => 5,
+    );
+    $organizationMembership = CRM_Member_BAO_Membership::add($params);
+    $organizationMembershipID = $organizationMembership->id;
+    $memberContactId[3] = $this->individualCreate(array('employer_id' => $employerId[2]), 0);
+    // Check that the employee inherited the membership
+    $params = array(
+      'contact_id' => $memberContactId[3],
+      'membership_type_id' => $membershipTypeId,
+    );
+    $result = $this->callAPISuccess('membership', 'get', $params);
+    $this->assertEquals(1, $result['count']);
+    $result = $result['values'][$result['id']];
+    $this->assertEquals($organizationMembershipID, $result['owner_membership_id']);
+
     // Set up params for enable/disable checks
     $relationship1 = $this->callAPISuccess('relationship', 'get', array('contact_id_a' => $memberContactId[1]));
     $params = array(
@@ -683,6 +699,7 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
       $this->assertEquals(array('id', 'end_date'), array_keys($membership));
     }
   }
+
   ///////////////// civicrm_membership_create methods
 
   /**
@@ -1515,7 +1532,6 @@ class api_v3_MembershipTest extends CiviUnitTestCase {
     $this->assertEquals('2009-01-21', $result['start_date']);
     $this->assertEquals('2010-01-20', $result['end_date']);
   }
-
 
   /**
    * Test that if dates are set they not over-ridden if id is passed in

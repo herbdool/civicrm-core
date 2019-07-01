@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -33,7 +33,6 @@
  * @group headless
  */
 class api_v3_ACLCachingTest extends CiviUnitTestCase {
-  protected $_apiversion = 3;
   protected $_params;
 
   public $DBResetRequired = FALSE;
@@ -53,7 +52,12 @@ class api_v3_ACLCachingTest extends CiviUnitTestCase {
     $this->quickCleanup($tablesToTruncate, TRUE);
   }
 
-  public function testActivityCreateCustomBefore() {
+  /**
+   * @param int $version
+   * @dataProvider versionThreeAndFour
+   */
+  public function testActivityCreateCustomBefore($version) {
+    $this->_apiversion = $version;
     $values = $this->callAPISuccess('custom_field', 'getoptions', array('field' => 'custom_group_id'));
     $this->assertTrue($values['count'] == 0);
     $this->CustomGroupCreate(array('extends' => 'Activity'));

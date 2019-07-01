@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -90,7 +90,7 @@ class CRM_Core_I18n_SchemaTest extends CiviUnitTestCase {
     // Test Currently skipped for civicrm_option_group and civicrm_event due to issues with the regex.
     // Agreed as not a blocker for CRM-20427 as an issue previously.
     if (!$skip_tests) {
-      $query6 = "SELECT " . '"'  . "Fixed the the {$table} ticket" . '"';
+      $query6 = "SELECT " . '"' . "Fixed the the {$table} ticket" . '"';
       $new_query6 = CRM_Core_I18n_Schema::rewriteQuery($query6);
       $this->assertEquals($query6, $new_query6);
     }
@@ -108,6 +108,15 @@ class CRM_Core_I18n_SchemaTest extends CiviUnitTestCase {
       $query9 = 'INSERT INTO ' . "{$table}" . ' (foo, bar) VALUES (123, "' . "Just a {$table} string" . '")';
       $new_query9 = CRM_Core_I18n_Schema::rewriteQuery($query9);
       $this->assertEquals('INSERT INTO ' . "{$expectedRewrite}" . ' (foo, bar) VALUES (123, "' . "Just a {$table} string" . '")', $new_query9);
+    }
+  }
+
+  public function testSchemaBuild() {
+    CRM_Core_I18n_Schema::makeMultilingual('en_US');
+    $testCreateTable = CRM_Core_DAO::executeQuery("show create table civicrm_price_set", [], TRUE, NULL, FALSE, FALSE);
+    while ($testCreateTable->fetch()) {
+      $this->assertContains("`title_en_US` varchar(255) COLLATE utf8_unicode_ci NOT NULL COMMENT 'Displayed title for the Price Set.'", $testCreateTable->Create_Table);
+      $this->assertContains("`help_pre_en_US` text COLLATE utf8_unicode_ci COMMENT 'Description and/or help text to display before fields in form.'", $testCreateTable->Create_Table);
     }
   }
 

@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -34,12 +34,13 @@
  */
 class api_v3_DomainTest extends CiviUnitTestCase {
 
-  /* This test case doesn't require DB reset - apart from
-  where cleanDB() is called. */
-
+  /**
+   * This test case doesn't require DB reset - apart from
+   * where cleanDB() is called.
+   * @var bool
+   */
   public $DBResetRequired = FALSE;
 
-  protected $_apiversion = 3;
   protected $params;
 
   /**
@@ -56,29 +57,27 @@ class api_v3_DomainTest extends CiviUnitTestCase {
     $params['entity_table'] = CRM_Core_BAO_Domain::getTableName();
     $defaultLocationType = CRM_Core_BAO_LocationType::getDefault();
     $domContact = $this->callAPISuccess('contact', 'create', array(
-        'contact_type' => 'Organization',
-        'organization_name' => 'new org',
-        'api.phone.create' => array(
-          'location_type_id' => $defaultLocationType->id,
-          'phone_type_id' => 1,
-          'phone' => '456-456',
-        ),
-        'api.address.create' => array(
-          'location_type_id' => $defaultLocationType->id,
-          'street_address' => '45 Penny Lane',
-        ),
-        'api.email.create' => array(
-          'location_type_id' => $defaultLocationType->id,
-          'email' => 'my@email.com',
-        ),
-      )
-    );
+      'contact_type' => 'Organization',
+      'organization_name' => 'new org',
+      'api.phone.create' => array(
+        'location_type_id' => $defaultLocationType->id,
+        'phone_type_id' => 1,
+        'phone' => '456-456',
+      ),
+      'api.address.create' => array(
+        'location_type_id' => $defaultLocationType->id,
+        'street_address' => '45 Penny Lane',
+      ),
+      'api.email.create' => array(
+        'location_type_id' => $defaultLocationType->id,
+        'email' => 'my@email.com',
+      ),
+    ));
 
     $this->callAPISuccess('domain', 'create', array(
-        'id' => 1,
-        'contact_id' => $domContact['id'],
-      )
-    );
+      'id' => 1,
+      'contact_id' => $domContact['id'],
+    ));
     $this->params = array(
       'name' => 'A-team domain',
       'description' => 'domain of chaos',
@@ -149,8 +148,11 @@ class api_v3_DomainTest extends CiviUnitTestCase {
    * This test checks for a memory leak.
    *
    * The leak was observed when doing 2 gets on current domain.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testGetCurrentDomainTwice() {
+  public function testGetCurrentDomainTwice($version) {
+    $this->_apiversion = $version;
     $domain = $this->callAPISuccess('domain', 'getvalue', array(
       'current_domain' => 1,
       'return' => 'name',
@@ -178,8 +180,11 @@ class api_v3_DomainTest extends CiviUnitTestCase {
    * Test if Domain.create does not touch the version of the domain.
    *
    * See CRM-17430.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testUpdateDomainName() {
+  public function testUpdateDomainName($version) {
+    $this->_apiversion = $version;
     // First create a domain.
     $domain_result = $this->callAPISuccess('domain', 'create', $this->params);
     $domain_before = $this->callAPISuccess('Domain', 'getsingle', array('id' => $domain_result['id']));
@@ -215,8 +220,11 @@ class api_v3_DomainTest extends CiviUnitTestCase {
    * Test civicrm_domain_create with empty params.
    *
    * Error expected.
+   * @param int $version
+   * @dataProvider versionThreeAndFour
    */
-  public function testCreateWithEmptyParams() {
+  public function testCreateWithEmptyParams($version) {
+    $this->_apiversion = $version;
     $this->callAPIFailure('domain', 'create', array());
   }
 

@@ -1,9 +1,9 @@
 <?php
 /*
  +--------------------------------------------------------------------+
- | CiviCRM version 4.7                                                |
+ | CiviCRM version 5                                                  |
  +--------------------------------------------------------------------+
- | Copyright CiviCRM LLC (c) 2004-2018                                |
+ | Copyright CiviCRM LLC (c) 2004-2019                                |
  +--------------------------------------------------------------------+
  | This file is a part of CiviCRM.                                    |
  |                                                                    |
@@ -256,7 +256,7 @@ class CRM_Core_BAO_SchemaHandlerTest extends CiviUnitTestCase {
     );
     CRM_Core_BAO_SchemaHandler::dropIndexIfExists('civicrm_prevnext_cache', 'index_all');
     //Missing Column `is_selected`.
-    CRM_Core_DAO::executeQuery('CREATE INDEX index_all ON civicrm_prevnext_cache (cacheKey, entity_id1, entity_id2, entity_table)');
+    CRM_Core_DAO::executeQuery('CREATE INDEX index_all ON civicrm_prevnext_cache (cachekey, entity_id1, entity_id2, entity_table)');
     $missingIndices = CRM_Core_BAO_SchemaHandler::getMissingIndices();
     $this->assertNotEmpty($missingIndices);
 
@@ -295,6 +295,70 @@ class CRM_Core_BAO_SchemaHandlerTest extends CiviUnitTestCase {
     CRM_Core_BAO_SchemaHandler::addIndexSignature('my_table', $indices);
     $this->assertEquals($indices['one']['sig'], 'my_table::1::id::name(3)');
     $this->assertEquals($indices['two']['sig'], 'my_table::0::title');
+  }
+
+  /**
+   * Test that columns are dropped
+   */
+  public function testDropColumn() {
+    CRM_Core_DAO::executeQuery('DROP TABLE IF EXISTS `civicrm_test_drop_column`');
+    CRM_Core_DAO::executeQuery('CREATE TABLE `civicrm_test_drop_column` (`id` int(10), `col1` varchar(255), `col2` varchar(255))');
+
+    // test with logging enabled to ensure log triggers don't break anything
+    $schema = new CRM_Logging_Schema();
+    $schema->enableLogging();
+
+    $alterParams = [
+      'table_name' => 'civicrm_test_drop_column',
+      'operation'  => 'delete',
+      'name'       => 'col1',
+      'type'       => 'varchar(255)',
+      'required'   => FALSE,
+      'searchable' => FALSE,
+    ];
+
+    // drop col1
+    CRM_Core_BAO_SchemaHandler::alterFieldSQL($alterParams, FALSE, TRUE);
+
+    $create_table = CRM_Core_DAO::executeQuery("SHOW CREATE TABLE civicrm_test_drop_column");
+    while ($create_table->fetch()) {
+      $this->assertNotContains('col1', $create_table->Create_Table);
+      $this->assertContains('col2', $create_table->Create_Table);
+    }
+
+    // drop col2
+    $alterParams['name'] = 'col2';
+    CRM_Core_BAO_SchemaHandler::alterFieldSQL($alterParams, FALSE, TRUE);
+
+    $create_table = CRM_Core_DAO::executeQuery("SHOW CREATE TABLE civicrm_test_drop_column");
+    while ($create_table->fetch()) {
+      $this->assertNotContains('col2', $create_table->Create_Table);
+    }
+  }
+
+  /**
+   * Tests the function that generates sql to modify fields.
+   */
+  public function testBuildFieldChangeSql() {
+    $params = [
+      'table_name' => 'big_table',
+      'operation' => 'add',
+      'name' => 'big_bob',
+      'type' => 'text',
+    ];
+    $sql = CRM_Core_BAO_SchemaHandler::buildFieldChangeSql($params, FALSE);
+    $this->assertEquals("ALTER TABLE big_table
+        ADD COLUMN `big_bob` text", trim($sql));
+
+    $params['operation'] = 'modify';
+    $params['comment'] = 'super big';
+    $sql = CRM_Core_BAO_SchemaHandler::buildFieldChangeSql($params, FALSE);
+    $this->assertEquals("ALTER TABLE big_table
+        MODIFY `big_bob` text COMMENT 'super big'", trim($sql));
+
+    $params['operation'] = 'delete';
+    $sql = CRM_Core_BAO_SchemaHandler::buildFieldChangeSql($params, FALSE);
+    $this->assertEquals('ALTER TABLE big_table DROP COLUMN `big_bob`', trim($sql));
   }
 
 }
