@@ -88,7 +88,6 @@
   jira        : andrimont
 
 - name        : Andrew Walker
-  organization: Circle Interactive
   jira        : andyw
 
 - github      : aniesshsethh
@@ -230,9 +229,6 @@
 - name        : Christophe Golle
   jira        : christophe.golle@gmail.com
 
-- github      : marsh-circle
-  name        : Clare Marsh
-
 - github      : clnlf
   name        : Carlos Loeza
   organization: Noah's Light Foundation
@@ -260,6 +256,10 @@
 - github      : coolbit
   name        : Chandana Bandara
   organization: CompuCorp
+
+- github      : CsarRamos
+  name        : César Ramos
+  organization: iXiam
 
 - github      : chrisfromredfin
   name        : Chris Wells
@@ -392,6 +392,10 @@
   organization: JMA Consulting
   jira        : edsel
 
+- github      : edvanleeuwen
+  name        : Ed van Leeuwen
+  organization: Centrale Organisatie van Voetbal Scheidsrechters (COVS)
+
 - github      : eileenmcnaughton
   name        : Eileen McNaughton
   organization: Wikimedia Foundation
@@ -486,6 +490,10 @@
 - github      : galgeek
   name        : Barbara Miller
   jira        : galgeek
+
+- github      : gareth-circle
+  name        : Gareth Hodgkinson
+  organization: Circle Interactive
 
 - github      : garethdylan361
   name        : Gareth Small
@@ -752,9 +760,9 @@
 - github      : kerasai
   name        : Will Long
 
-- github      : kirk-jackson
+- github      : kirk-circle
   name        : Kirk Jackson
-  organization: Campaign Against Arms Trade
+  organization: Circle Interactive
   jira        : kirk
 
 - github      : kngs
@@ -858,6 +866,10 @@
   name        : Lionel Smith-Gordon
   jira        : lsmithgo
 
+- github      : ltaliano
+  name        : Lisa Taliano
+  organization: National Urban League
+
 - github      : lyyana
   name        : Yuliyana Liyana
   organization: Oxfam Germany
@@ -884,8 +896,7 @@
   jira        : manish
 
 - github      : marsh-circle
-
-- name        : Martin Castle
+  name        : Martin Castle
   organization: Circle Interactive
   jira        : marshCircle
 
@@ -1154,6 +1165,7 @@
 - github      : pradpnayak
   name        : Pradeep Nayak
   jira        : pradeep.nayak
+  organization: Circle Interactive
 
 - github      : pratik-joshi
   name        : Pratik Joshi
@@ -1235,7 +1247,7 @@
 
 - github      : scoobird
   name        : Morgan Robinson
-  organization: Palante
+  organization: Palante Technology Cooperative
 
 - name        : Steve Binkowski
   jira        : s.bink
@@ -1505,6 +1517,10 @@
 - name        : Milli Aje
   organization: Debre-Genet Holy Trinity Ethiopian Orthodox Tewahedo Church
   jira        : 'website@dght.uk'
+
+- github      : wadelson
+  organization: Webstanz
+  name        : Adelson
 
 - github      : wdecraene
   organization: Wim De Craene

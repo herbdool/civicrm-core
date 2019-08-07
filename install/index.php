@@ -703,16 +703,6 @@ class InstallRequirements {
       $this->requireWriteable($dirName, $testDetails, TRUE);
     }
 
-    //check for Config.IDS.ini, file may exist in re-install
-    $configIDSiniDir = array($cmsPath, 'sites', $siteDir, 'files', 'civicrm', 'upload', 'Config.IDS.ini');
-
-    if (is_array($configIDSiniDir) && !empty($configIDSiniDir)) {
-      $configIDSiniFile = implode(CIVICRM_DIRECTORY_SEPARATOR, $configIDSiniDir);
-      if (file_exists($configIDSiniFile)) {
-        unlink($configIDSiniFile);
-      }
-    }
-
     // Check for rewriting
     if (isset($_SERVER['SERVER_SOFTWARE'])) {
       $webserver = strip_tags(trim($_SERVER['SERVER_SOFTWARE']));
@@ -1421,7 +1411,7 @@ class InstallRequirements {
     $result = mysqli_query($conn, 'DROP TABLE civicrm_utf8mb4_test');
 
     // Ensure that the MySQL driver supports utf8mb4 encoding.
-    $version = mysqli_get_client_info($conn);
+    $version = mysqli_get_client_info();
     if (strpos($version, 'mysqlnd') !== FALSE) {
       // The mysqlnd driver supports utf8mb4 starting at version 5.0.9.
       $version = preg_replace('/^\D+([\d.]+).*/', '$1', $version);

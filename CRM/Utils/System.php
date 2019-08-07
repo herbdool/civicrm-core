@@ -829,7 +829,7 @@ class CRM_Utils_System {
     self::setHttpHeader('Expires', $now);
 
     // lem9 & loic1: IE needs specific headers
-    $isIE = strstr($_SERVER['HTTP_USER_AGENT'], 'MSIE');
+    $isIE = empty($_SERVER['HTTP_USER_AGENT']) ? FALSE : strstr($_SERVER['HTTP_USER_AGENT'], 'MSIE');
     if ($ext) {
       $fileString = "filename=\"{$name}.{$ext}\"";
     }
@@ -1396,12 +1396,12 @@ class CRM_Utils_System {
    * @param int $status
    *   (optional) Code with which to exit.
    *
-   * @throws \CRM_Core_PrematureExit_Exception
+   * @param array $testParameters
    */
-  public static function civiExit($status = 0) {
+  public static function civiExit($status = 0, $testParameters = []) {
 
     if (CIVICRM_UF === 'UnitTests') {
-      throw new CRM_Core_Exception_PrematureExitException('civiExit called');
+      throw new CRM_Core_Exception_PrematureExitException('civiExit called', $testParameters);
     }
     if ($status > 0) {
       http_response_code(500);
@@ -1432,7 +1432,7 @@ class CRM_Utils_System {
     // zealous about destroying *all* memory-backed caches during a flush().
     // These flushes simulate that legacy behavior. However, they should probably
     // be removed at some point.
-    $localDrivers = ['CRM_Utils_Cache_Arraycache', 'CRM_Utils_Cache_NoCache'];
+    $localDrivers = ['CRM_Utils_Cache_ArrayCache', 'CRM_Utils_Cache_NoCache'];
     if (Civi\Core\Container::isContainerBooted()
       && !in_array(get_class(CRM_Utils_Cache::singleton()), $localDrivers)) {
       Civi::cache('long')->flush();
@@ -1440,6 +1440,8 @@ class CRM_Utils_System {
       Civi::cache('js_strings')->flush();
       Civi::cache('community_messages')->flush();
       Civi::cache('groups')->flush();
+      Civi::cache('navigation')->flush();
+      Civi::cache('customData')->flush();
       CRM_Extension_System::singleton()->getCache()->flush();
       CRM_Cxn_CiviCxnHttp::singleton()->getCache()->flush();
     }
@@ -1447,7 +1449,7 @@ class CRM_Utils_System {
     // also reset the various static memory caches
 
     // reset the memory or array cache
-    CRM_Core_BAO_Cache::deleteGroup('contact fields', NULL, FALSE);
+    Civi::cache('fields')->flush();
 
     // reset ACL cache
     CRM_ACL_BAO_Cache::resetCache();

@@ -110,7 +110,7 @@ class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
     $contributionID = CRM_Utils_Array::value('contribution', $ids, CRM_Utils_Array::value('id', $params));
     $duplicates = [];
     if (self::checkDuplicate($params, $duplicates, $contributionID)) {
-      $message = ts("Duplicate error - existing contribution record(s) have a matching Transaction ID or Invoice ID. Contribution record ID(s) are: " . implode(', ', $duplicates));
+      $message = ts("Duplicate error - existing contribution record(s) have a matching Transaction ID or Invoice ID. Contribution record ID(s) are: %1", [1 => implode(', ', $duplicates)]);
       throw new CRM_Core_Exception($message);
     }
 
@@ -992,7 +992,7 @@ class CRM_Contribute_BAO_Contribution extends CRM_Contribute_DAO_Contribution {
     // as they would then me membership.contact_id, membership.is_test etc
     return civicrm_api3('Membership', 'get', [
       'id' => ['IN' => $membershipIDs],
-      'return' => ['id', 'contact_id', 'membership_type_id', 'is_test'],
+      'return' => ['id', 'contact_id', 'membership_type_id', 'is_test', 'status_id', 'end_date'],
     ])['values'];
   }
 
@@ -3891,6 +3891,7 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
       'In Progress' => ['Cancelled', 'Completed', 'Failed'],
       'Refunded' => ['Cancelled', 'Completed'],
       'Partially paid' => ['Completed'],
+      'Pending refund' => ['Completed', 'Refunded'],
     ];
 
     if (!in_array($contributionStatuses[$fields['contribution_status_id']],
@@ -4013,6 +4014,7 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
     elseif ($paymentType == 'refund') {
       $trxnsData['total_amount'] = -$trxnsData['total_amount'];
       $trxnsData['participant_id'] = $participantId;
+      $trxnsData['contribution_id'] = $contributionId;
       return civicrm_api3('Payment', 'create', $trxnsData)['id'];
     }
   }
@@ -4736,7 +4738,7 @@ INNER JOIN civicrm_activity ON civicrm_activity_contact.activity_id = civicrm_ac
     // Use input value if supplied.
     if (!empty($input['receipt_from_email'])) {
       return [
-        CRM_Utils_array::value('receipt_from_name', $input, ''),
+        CRM_Utils_Array::value('receipt_from_name', $input, ''),
         $input['receipt_from_email'],
       ];
     }
@@ -5410,11 +5412,16 @@ LIMIT 1;";
           $membershipParams['membership_type_id'] = $dao->membership_type_id;
         }
       }
-
-      $membershipParams['num_terms'] = $contribution->getNumTermsByContributionAndMembershipType(
-        $membershipParams['membership_type_id'],
-        $primaryContributionID
-      );
+      if (empty($membership['end_date']) || (int) $membership['status_id'] !== CRM_Core_PseudoConstant::getKey('CRM_Member_BAO_Membership', 'status_id', 'Pending')) {
+        // Passing num_terms to the api triggers date calculations, but for pending memberships these may be already calculated.
+        // sigh - they should  be  consistent but removing the end date check causes test failures & maybe UI too?
+        // The api assumes num_terms is a special sauce for 'is_renewal' so we need to not pass it when updating a pending to completed.
+        // @todo once apiv4 ships with core switch to that & find sanity.
+        $membershipParams['num_terms'] = $contribution->getNumTermsByContributionAndMembershipType(
+          $membershipParams['membership_type_id'],
+          $primaryContributionID
+        );
+      }
       // @todo remove all this stuff in favour of letting the api call further down handle in
       // (it is a duplication of what the api does).
       $dates = array_fill_keys([
@@ -5905,12 +5912,36 @@ LIMIT 1;";
     }
     $contributionDetails = [];
     foreach ($contributionIds as $id) {
-      $result = civicrm_api3('Contribution', 'get', ['id' => $id]);
+      $result = self::getContributionTokenValues($id, $messageToken);
       $contributionDetails[$result['values'][$result['id']]['contact_id']]['subject'] = CRM_Utils_Token::replaceContributionTokens($subject, $result, FALSE, $subjectToken, FALSE, $escapeSmarty);
       $contributionDetails[$result['values'][$result['id']]['contact_id']]['text'] = CRM_Utils_Token::replaceContributionTokens($text, $result, FALSE, $messageToken, FALSE, $escapeSmarty);
       $contributionDetails[$result['values'][$result['id']]['contact_id']]['html'] = CRM_Utils_Token::replaceContributionTokens($html, $result, FALSE, $messageToken, FALSE, $escapeSmarty);
     }
     return $contributionDetails;
+  }
+
+  /**
+   * Get the contribution fields for $id and display labels where
+   * appropriate (if the token is present).
+   *
+   * @param int $id
+   * @param array $messageToken
+   * @return array
+   */
+  public static function getContributionTokenValues($id, $messageToken) {
+    if (empty($id)) {
+      return [];
+    }
+    $result = civicrm_api3('Contribution', 'get', ['id' => $id]);
+    // lab.c.o mail#46 - show labels, not values, for custom fields with option values.
+    if (!empty($messageToken)) {
+      foreach ($result['values'][$id] as $fieldName => $fieldValue) {
+        if (strpos($fieldName, 'custom_') === 0 && array_search($fieldName, $messageToken['contribution']) !== FALSE) {
+          $result['values'][$id][$fieldName] = CRM_Core_BAO_CustomField::displayValue($result['values'][$id][$fieldName], $fieldName);
+        }
+      }
+    }
+    return $result;
   }
 
   /**

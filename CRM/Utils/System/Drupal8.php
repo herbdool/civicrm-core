@@ -303,7 +303,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
     $config = CRM_Core_Config::singleton();
     $base = $absolute ? $config->userFrameworkBaseURL : 'internal:/';
 
-    $url = \Drupal\civicrm\CivicrmHelper::parseURL("{$path}?{$query}");
+    $url = $this->parseURL("{$path}?{$query}");
 
     // Not all links that CiviCRM generates are Drupal routes, so we use the weaker ::fromUri method.
     try {
@@ -669,6 +669,50 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
   }
 
   /**
+   * Helper function to extract path, query and route name from Civicrm URLs.
+   *
+   * For example, 'civicrm/contact/view?reset=1&cid=66' will be returned as:
+   *
+   * @code
+   * array(
+   *   'path' => 'civicrm/contact/view',
+   *   'route' => 'civicrm.civicrm_contact_view',
+   *   'query' => array('reset' => '1', 'cid' => '66'),
+   * );
+   * @endcode
+   *
+   * @param string $url
+   *   The url to parse.
+   *
+   * @return string[]
+   *   The parsed url parts, containing 'path', 'route' and 'query'.
+   */
+  public function parseUrl($url) {
+    $processed = ['path' => '', 'route_name' => '', 'query' => []];
+
+    // Remove leading '/' if it exists.
+    $url = ltrim($url, '/');
+
+    // Separate out the url into its path and query components.
+    $url = parse_url($url);
+    if (empty($url['path'])) {
+      return $processed;
+    }
+    $processed['path'] = $url['path'];
+
+    // Create a route name by replacing the forward slashes in the path with
+    // underscores, civicrm/contact/search => civicrm.civicrm_contact_search.
+    $processed['route_name'] = 'civicrm.' . implode('_', explode('/', $url['path']));
+
+    // Turn the query string (if it exists) into an associative array.
+    if (!empty($url['query'])) {
+      parse_str($url['query'], $processed['query']);
+    }
+
+    return $processed;
+  }
+
+  /**
    * Append Drupal8 js to coreResourcesList.
    *
    * @param \Civi\Core\Event\GenericHookEvent $e
@@ -709,7 +753,7 @@ class CRM_Utils_System_Drupal8 extends CRM_Utils_System_DrupalBase {
 
     // Drupal might not be bootstrapped if being called by the REST API.
     if (!class_exists('Drupal') || !\Drupal::hasContainer()) {
-      return NULL;
+      return $url;
     }
 
     $language = $this->getCurrentLanguage();

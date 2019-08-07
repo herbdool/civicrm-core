@@ -126,10 +126,10 @@ class CRM_Event_BAO_Query extends CRM_Core_BAO_Query {
       }
 
       if (!empty($query->_returnProperties['event_type_id'])) {
-        $query->_select['event_type_id'] = "event_type.id as event_type_id";
+        $query->_select['event_type_id'] = "civicrm_event.event_type_id as event_type_id";
         $query->_element['event_type_id'] = 1;
-        $query->_tables['event_type'] = 1;
-        $query->_whereTables['event_type'] = 1;
+        $query->_tables['civicrm_event'] = 1;
+        $query->_whereTables['civicrm_event'] = 1;
       }
 
       //add status_id
@@ -238,7 +238,7 @@ class CRM_Event_BAO_Query extends CRM_Core_BAO_Query {
       if (substr($query->_params[$id][0], 0, 6) == 'event_' ||
         substr($query->_params[$id][0], 0, 12) == 'participant_'
       ) {
-        if ($query->_mode == CRM_Contact_BAO_QUERY::MODE_CONTACTS) {
+        if ($query->_mode == CRM_Contact_BAO_Query::MODE_CONTACTS) {
           $query->_useDistinct = TRUE;
         }
         $grouping = $query->_params[$id][3];
