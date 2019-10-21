@@ -143,7 +143,7 @@ class CRM_Financial_Form_FinancialAccount extends CRM_Contribute_Form {
       if ($values['financial_account_type_id'] != $financialAccountTypeId) {
         $errorMsg['financial_account_type_id'] = ts('Taxable accounts should have Financial Account Type set to Liability.');
       }
-      if (CRM_Utils_Array::value('tax_rate', $values) == NULL) {
+      if (!isset($values['tax_rate'])) {
         $errorMsg['tax_rate'] = ts('Please enter value for tax rate');
       }
     }
@@ -154,6 +154,7 @@ class CRM_Financial_Form_FinancialAccount extends CRM_Contribute_Form {
     }
     if ($self->_action & CRM_Core_Action::UPDATE) {
       if (!(isset($values['is_tax']))) {
+        // @todo replace with call to CRM_Financial_BAO_FinancialAccount getSalesTaxFinancialAccount
         $relationshipId = key(CRM_Core_PseudoConstant::accountOptionValues('account_relationship', NULL, " AND v.name LIKE 'Sales Tax Account is' "));
         $params = [
           'financial_account_id' => $self->_id,

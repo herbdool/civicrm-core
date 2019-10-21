@@ -43,10 +43,13 @@
 function civicrm_api3_payment_get($params) {
   $financialTrxn = [];
   $limit = '';
-  if (isset($params['options']) && CRM_Utils_Array::value('limit', $params['options'])) {
+  if (isset($params['options']) && !empty($params['options']['limit'])) {
     $limit = CRM_Utils_Array::value('limit', $params['options']);
   }
   $params['options']['limit'] = 0;
+  if (isset($params['trxn_id'])) {
+    $params['financial_trxn_id.trxn_id'] = $params['trxn_id'];
+  }
   $eft = civicrm_api3('EntityFinancialTrxn', 'get', $params);
   if (!empty($eft['values'])) {
     $eftIds = [];
@@ -132,7 +135,7 @@ function civicrm_api3_payment_cancel($params) {
  */
 function civicrm_api3_payment_create($params) {
   // Check if it is an update
-  if (CRM_Utils_Array::value('id', $params)) {
+  if (!empty($params['id'])) {
     $amount = $params['total_amount'];
     civicrm_api3('Payment', 'cancel', $params);
     $params['total_amount'] = $amount;
@@ -178,6 +181,12 @@ function _civicrm_api3_payment_create_spec(&$params) {
       'title' => ts('Cancel Date'),
       'type' => CRM_Utils_Type::T_DATE + CRM_Utils_Type::T_TIME,
     ],
+    'is_send_contribution_notification' => [
+      'title' => ts('Send out notifications based on contribution status change?'),
+      'description' => ts('Most commonly this equates to emails relating to the contribution, event, etcwhen a payment completes a contribution'),
+      'type' => CRM_Utils_Type::T_BOOLEAN,
+      'api.default' => TRUE,
+    ],
   ];
 }
 
@@ -203,6 +212,10 @@ function _civicrm_api3_payment_get_spec(&$params) {
       'title' => 'Entity ID',
       'type' => CRM_Utils_Type::T_INT,
       'api.aliases' => ['contribution_id'],
+    ],
+    'trxn_id' => [
+      'title' => 'Transaction ID',
+      'type' => CRM_Utils_Type::T_STRING,
     ],
   ];
 }
@@ -260,12 +273,9 @@ function _civicrm_api3_payment_cancel_spec(&$params) {
  */
 function civicrm_api3_payment_sendconfirmation($params) {
   $allowedParams = [
-    'receipt_from_email',
-    'receipt_from_name',
-    'cc_receipt',
-    'bcc_receipt',
-    'receipt_text',
+    'from',
     'id',
+    'check_permissions',
   ];
   $input = array_intersect_key($params, array_flip($allowedParams));
   // use either the contribution or membership receipt, based on whether it’s a membership-related contrib or not
@@ -293,5 +303,9 @@ function _civicrm_api3_payment_sendconfirmation_spec(&$params) {
     'api.required' => 1,
     'title' => ts('Payment ID'),
     'type' => CRM_Utils_Type::T_INT,
+  ];
+  $params['from_email_address'] = [
+    'title' => ts('From email; an email string or the id of a valid email'),
+    'type' => CRM_Utils_Type::T_STRING,
   ];
 }

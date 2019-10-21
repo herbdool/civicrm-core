@@ -45,7 +45,7 @@ function civicrm_api3_order_get($params) {
   $contributions = [];
   $params['api.line_item.get'] = ['qty' => ['<>' => 0]];
   $isSequential = FALSE;
-  if (CRM_Utils_Array::value('sequential', $params)) {
+  if (!empty($params['sequential'])) {
     $params['sequential'] = 0;
     $isSequential = TRUE;
   }
@@ -80,15 +80,21 @@ function _civicrm_api3_order_get_spec(&$params) {
  * @param array $params
  *   Input parameters.
  *
- * @throws API_Exception
  * @return array
  *   Api result array
+ *
+ * @throws \CiviCRM_API3_Exception
+ * @throws API_Exception
  */
 function civicrm_api3_order_create($params) {
-
+  civicrm_api3_verify_one_mandatory($params, NULL, ['line_items', 'total_amount']);
   $entity = NULL;
   $entityIds = [];
-  if (CRM_Utils_Array::value('line_items', $params) && is_array($params['line_items'])) {
+  $contributionStatus = CRM_Utils_Array::value('contribution_status_id', $params);
+  if ($contributionStatus !== 'Pending' && 'Pending' !== CRM_Core_PseudoConstant::getName('CRM_Contribute_BAO_Contribution', 'contribution_status_id', $contributionStatus)) {
+    CRM_Core_Error::deprecatedFunctionWarning('Creating a Order with a status other than pending is deprecated. Currently empty defaults to "Completed" so as a transition not passing in "Pending" is deprecated');
+  }
+  if (!empty($params['line_items']) && is_array($params['line_items'])) {
     $priceSetID = NULL;
     CRM_Contribute_BAO_Contribution::checkLineItems($params);
     foreach ($params['line_items'] as $lineItems) {
@@ -100,6 +106,9 @@ function civicrm_api3_order_create($params) {
       if ($entityParams) {
         if (in_array($entity, ['participant', 'membership'])) {
           $entityParams['skipLineItem'] = TRUE;
+          if ($contributionStatus === 'Pending') {
+            $entityParams['status_id'] = ($entity === 'participant' ? 'Pending from incomplete transaction' : 'Pending');
+          }
           $entityResult = civicrm_api3($entity, 'create', $entityParams);
           $params['contribution_mode'] = $entity;
           $entityIds[] = $params[$entity . '_id'] = $entityResult['id'];
@@ -124,7 +133,7 @@ function civicrm_api3_order_create($params) {
   }
   $contribution = civicrm_api3('Contribution', 'create', $params);
   // add payments
-  if ($entity && CRM_Utils_Array::value('id', $contribution)) {
+  if ($entity && !empty($contribution['id'])) {
     foreach ($entityIds as $entityId) {
       $paymentParams = [
         'contribution_id' => $contribution['id'],
@@ -213,7 +222,6 @@ function _civicrm_api3_order_create_spec(&$params) {
   $params['total_amount'] = [
     'name' => 'total_amount',
     'title' => 'Total Amount',
-    'api.required' => TRUE,
   ];
   $params['financial_type_id'] = [
     'name' => 'financial_type_id',

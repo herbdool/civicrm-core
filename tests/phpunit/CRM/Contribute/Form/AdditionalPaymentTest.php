@@ -138,6 +138,7 @@ class CRM_Contribute_Form_AdditionalPaymentTest extends CiviUnitTestCase {
     $this->checkResults([30, 70], 2);
     $mut->assertSubjects(['Payment Receipt -']);
     $mut->checkMailLog([
+      'From: site@something.com',
       'Dear Anthony,',
       'Payment Details',
       'Total Fees: $ 100.00',
@@ -196,6 +197,8 @@ class CRM_Contribute_Form_AdditionalPaymentTest extends CiviUnitTestCase {
 
   /**
    * Test the submit function that completes the partially paid Contribution with multiple payments.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testMultiplePaymentForPartiallyPaidContributionWithOneCreditCardPayment() {
     $mut = new CiviMailUtils($this, TRUE);
@@ -237,13 +240,31 @@ class CRM_Contribute_Form_AdditionalPaymentTest extends CiviUnitTestCase {
 
   /**
    * Test the submit function that completes the pending pay later Contribution using Credit Card.
+   *
+   * @throws \CRM_Core_Exception
    */
   public function testAddPaymentUsingCreditCardForPendingPayLaterContribution() {
+    $mut = new CiviMailUtils($this, TRUE);
     $this->createContribution('Pending');
 
     // pay additional amount by using Credit Card
-    $this->submitPayment(100, 'live');
+    $this->submitPayment(100, 'live', TRUE);
     $this->checkResults([100], 1);
+
+    $mut->checkMailLog([
+      'A payment has been received',
+      'Total Fees: $ 100.00',
+      'This Payment Amount: $ 100.00',
+      'Balance Owed: $ 0.00 ',
+      'Paid By: Credit Card',
+      '***********1111',
+      'Billing Name and Address',
+      'Vancouver, AE 1321312',
+      'Expires: May 2025',
+
+    ]);
+    $mut->stop();
+    $mut->clearMessages();
   }
 
   /**
@@ -359,6 +380,7 @@ class CRM_Contribute_Form_AdditionalPaymentTest extends CiviUnitTestCase {
    *
    * @param string $typeofContribution
    *
+   * @throws \CRM_Core_Exception
    */
   public function createContribution($typeofContribution = 'Pending') {
     if ($typeofContribution == 'Partially paid') {
@@ -377,7 +399,7 @@ class CRM_Contribute_Form_AdditionalPaymentTest extends CiviUnitTestCase {
     $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
     $contribution = $this->callAPISuccessGetSingle('Contribution', ['id' => $contribution['id']]);
     $this->assertNotEmpty($contribution);
-    $this->assertEquals($typeofContribution, $contribution['contribution_status']);
+    $this->assertEquals($typeofContribution, CRM_Core_PseudoConstant::getName('CRM_Contribute_BAO_Contribution', 'contribution_status_id', $contribution['contribution_status_id']));
     $this->_contributionId = $contribution['id'];
   }
 

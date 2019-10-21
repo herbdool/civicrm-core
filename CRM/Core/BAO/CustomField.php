@@ -596,6 +596,9 @@ class CRM_Core_BAO_CustomField extends CRM_Core_DAO_CustomField {
       ) {
         continue;
       }
+      if (!empty($values['text_length'])) {
+        $values['maxlength'] = (int) $values['text_length'];
+      }
 
       /* generate the key for the fields array */
 
@@ -1172,7 +1175,16 @@ class CRM_Core_BAO_CustomField extends CRM_Core_DAO_CustomField {
             // In other contexts show a paperclip icon
             if (CRM_Utils_Rule::integer($value)) {
               $icons = CRM_Core_BAO_File::paperIconAttachment('*', $value);
-              $display = $icons[$value] . civicrm_api3('File', 'getvalue', ['return' => "description", 'id' => $value]);
+
+              $file_description = '';
+              try {
+                $file_description = civicrm_api3('File', 'getvalue', ['return' => "description", 'id' => $value]);
+              }
+              catch (CiviCRM_API3_Exception $dontcare) {
+                // don't care
+              }
+
+              $display = "{$icons[$value]}{$file_description}";
             }
             else {
               //CRM-18396, if filename is passed instead
@@ -1252,7 +1264,7 @@ class CRM_Core_BAO_CustomField extends CRM_Core_DAO_CustomField {
         if (!$value) {
           $config = CRM_Core_Config::singleton();
           if ($config->defaultContactCountry) {
-            $value = $config->defaultContactCountry();
+            $value = CRM_Core_BAO_Country::defaultContactCountry();
           }
         }
       }

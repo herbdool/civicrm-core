@@ -152,7 +152,7 @@ class CRM_Utils_System_Backdrop extends CRM_Utils_System_DrupalBase {
    */
   public function getLoginURL($destination = '') {
     $query = $destination ? ['destination' => $destination] : [];
-    return url('user', ['query' => $query, 'absolute' => TRUE]);
+    return url('user/login', ['query' => $query, 'absolute' => TRUE]);
   }
 
   /**
@@ -879,9 +879,6 @@ AND    u.status = 1
       }
       else {
         $contactMatching++;
-      }
-      if (is_object($match)) {
-        $match->free();
       }
     }
 

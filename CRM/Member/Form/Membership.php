@@ -213,9 +213,7 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
     // This string makes up part of the class names, differentiating them (not sure why) from the membership fields.
     $this->assign('formClass', 'membership');
     parent::preProcess();
-    if ($this->isUpdateToExistingRecurringMembership()) {
-      $this->entityFields['end_date']['is_freeze'] = TRUE;
-    }
+
     // get price set id.
     $this->_priceSetId = CRM_Utils_Array::value('priceSetId', $_GET);
     $this->set('priceSetId', $this->_priceSetId);
@@ -1132,20 +1130,21 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
     //take the required membership recur values.
     if ($this->_mode && !empty($formValues['auto_renew'])) {
       $params['is_recur'] = $formValues['is_recur'] = TRUE;
-      $mapping = [
-        'frequency_interval' => 'duration_interval',
-        'frequency_unit' => 'duration_unit',
-      ];
 
       $count = 0;
       foreach ($this->_memTypeSelected as $memType) {
         $recurMembershipTypeValues = CRM_Utils_Array::value($memType,
-          $this->_recurMembershipTypes, []
+          $this->allMembershipTypeDetails, []
         );
-        foreach ($mapping as $mapVal => $mapParam) {
-          $membershipTypeValues[$memType][$mapVal] = CRM_Utils_Array::value($mapParam,
-            $recurMembershipTypeValues
-          );
+        if (!$recurMembershipTypeValues['auto_renew']) {
+          continue;
+        }
+        foreach ([
+          'frequency_interval' => 'duration_interval',
+          'frequency_unit' => 'duration_unit',
+        ] as $mapVal => $mapParam) {
+          $membershipTypeValues[$memType][$mapVal] = $recurMembershipTypeValues[$mapParam];
+
           if (!$count) {
             $formValues[$mapVal] = CRM_Utils_Array::value($mapParam,
               $recurMembershipTypeValues
@@ -1162,10 +1161,16 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
 
     $lineItem = [$this->_priceSetId => []];
 
+    // BEGIN Fix for dev/core/issues/860
+    // Prepare fee block and call buildAmount hook - based on CRM_Price_BAO_PriceSet::buildPriceSet().
+    CRM_Price_BAO_PriceSet::applyACLFinancialTypeStatusToFeeBlock($this->_priceSet['fields']);
+    CRM_Utils_Hook::buildAmount('membership', $this, $this->_priceSet['fields']);
+    // END Fix for dev/core/issues/860
+
     CRM_Price_BAO_PriceSet::processAmount($this->_priceSet['fields'],
       $formValues, $lineItem[$this->_priceSetId], NULL, $this->_priceSetId);
 
-    if (CRM_Utils_Array::value('tax_amount', $formValues)) {
+    if (!empty($formValues['tax_amount'])) {
       $params['tax_amount'] = $formValues['tax_amount'];
     }
     $params['total_amount'] = CRM_Utils_Array::value('amount', $formValues);
@@ -1739,7 +1744,7 @@ class CRM_Member_Form_Membership extends CRM_Member_Form {
     // if selected membership doesn't match with earlier membership
       !in_array($this->_memType, $this->_memTypeSelected)
     ) {
-      if (CRM_Utils_Array::value('is_recur', $inputParams)) {
+      if (!empty($inputParams['is_recur'])) {
         CRM_Core_Session::setStatus(ts('Associated recurring contribution cannot be updated on membership type change.', ts('Error'), 'error'));
         return;
       }

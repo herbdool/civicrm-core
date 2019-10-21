@@ -374,6 +374,7 @@ function _civicrm_api3_contribution_get_spec(&$params) {
   $params['payment_instrument_id']['api.aliases'] = ['contribution_payment_instrument', 'payment_instrument'];
   $params['contact_id'] = CRM_Utils_Array::value('contribution_contact_id', $params);
   $params['contact_id']['api.aliases'] = ['contribution_contact_id'];
+  $params['is_template']['api.default'] = 0;
   unset($params['contribution_contact_id']);
 }
 
@@ -612,6 +613,15 @@ function _civicrm_api3_contribution_completetransaction_spec(&$params) {
       'optionGroupName' => 'accept_creditcard',
     ],
   ];
+  // At some point we will deprecate this api in favour of calling payment create which will in turn call this
+  // api if appropriate to transition related entities and send receipts - ie. financial responsibility should
+  // not exist in completetransaction. For now we just need to allow payment.create to force a bypass on the
+  // things it does itself.
+  $params['is_post_payment_create'] = [
+    'title' => 'Is this being called from payment create?',
+    'type' => CRM_Utils_Type::T_BOOLEAN,
+    'description' => 'The \'correct\' flow is to call payment.create for the financial side & for that to call completecontribution for the entity & receipt management. However, we need to still support completetransaction directly for legacy reasons',
+  ];
 }
 
 /**
@@ -669,6 +679,7 @@ function civicrm_api3_contribution_repeattransaction($params) {
       'fee_amount',
       'financial_type_id',
       'contribution_status_id',
+      'membership_id',
     ];
     $input = array_intersect_key($params, array_fill_keys($passThroughParams, NULL));
 
@@ -728,7 +739,7 @@ function _ipn_process_transaction(&$params, $contribution, $input, $ids, $firstC
   $input['pan_truncation'] = CRM_Utils_Array::value('pan_truncation', $params);
   $transaction = new CRM_Core_Transaction();
   return CRM_Contribute_BAO_Contribution::completeOrder($input, $ids, $objects, $transaction,
-    !empty($contribution->contribution_recur_id), $contribution);
+    !empty($contribution->contribution_recur_id), $contribution, CRM_Utils_Array::value('is_post_payment_create', $params));
 }
 
 /**
