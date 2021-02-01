@@ -19,6 +19,7 @@
 
 namespace api\v4\Action;
 
+use Civi\Api4\Activity;
 use Civi\Api4\Contact;
 use Civi\Api4\Relationship;
 use api\v4\UnitTestCase;
@@ -58,6 +59,88 @@ class DateTest extends UnitTestCase {
       ->execute()
       ->indexBy('id');
     $this->assertArrayNotHasKey($r, $result);
+  }
+
+  public function testRelativeDateRanges() {
+    $c1 = Contact::create()
+      ->addValue('first_name', 'c')
+      ->addValue('last_name', 'one')
+      ->execute()
+      ->first()['id'];
+
+    // Avoid problems with `strtotime(<date arithmetic expression>)` giving
+    // impossible dates like April 31 which roll over and then don't match.
+    $thisMonth = date('m');
+    $lastMonth = ($thisMonth === 1 ? 12 : $thisMonth - 1);
+    $nextMonth = ($thisMonth === 12 ? 1 : $thisMonth + 1);
+    $lastMonthsYear = ($thisMonth === 1 ? date('Y') - 1 : date('Y'));
+    $nextMonthsYear = ($thisMonth === 12 ? date('Y') + 1 : date('Y'));
+
+    $act = Activity::save()
+      ->setDefaults(['activity_type_id:name' => 'Meeting', 'source_contact_id' => $c1])
+      ->addRecord(['activity_date_time' => (date('Y') - 3) . '-' . date('m-01 H:i:s')])
+      ->addRecord(['activity_date_time' => (date('Y') - 1) . '-' . date('m-01 H:i:s')])
+      ->addRecord(['activity_date_time' => "{$lastMonthsYear}-{$lastMonth}-01 " . date('H:i:s')])
+      ->addRecord(['activity_date_time' => 'now'])
+      ->addRecord(['activity_date_time' => "{$nextMonthsYear}-{$nextMonth}-01 " . date('H:i:s')])
+      ->addRecord(['activity_date_time' => (date('Y') + 1) . '-' . date('m-01 H:i:s')])
+      ->addRecord(['activity_date_time' => (date('Y') + 3) . '-' . date('m-01 H:i:s')])
+      ->execute()->column('id');
+
+    $result = Activity::get(FALSE)->addSelect('id')
+      ->addWhere('activity_date_time', '>', 'previous.year')
+      ->execute()->column('id');
+    $this->assertNotContains($act[0], $result);
+    $this->assertContains($act[3], $result);
+    $this->assertContains($act[4], $result);
+    $this->assertContains($act[5], $result);
+    $this->assertContains($act[6], $result);
+
+    $result = Activity::get(FALSE)->addSelect('id')
+      ->addWhere('activity_date_time', '>', 'this.year')
+      ->execute()->column('id');
+    $this->assertNotContains($act[0], $result);
+    $this->assertNotContains($act[1], $result);
+    $this->assertNotContains($act[2], $result);
+    $this->assertNotContains($act[3], $result);
+    $this->assertContains($act[5], $result);
+    $this->assertContains($act[6], $result);
+
+    $result = Activity::get(FALSE)->addSelect('id')
+      ->addWhere('activity_date_time', '>=', 'this.year')
+      ->execute()->column('id');
+    $this->assertNotContains($act[0], $result);
+    $this->assertNotContains($act[1], $result);
+    $this->assertContains($act[3], $result);
+    $this->assertContains($act[4], $result);
+    $this->assertContains($act[5], $result);
+    $this->assertContains($act[6], $result);
+
+    $result = Activity::get(FALSE)->addSelect('id')
+      ->addWhere('activity_date_time', '<', 'previous.year')
+      ->execute()->column('id');
+    $this->assertContains($act[0], $result);
+    $this->assertNotContains($act[4], $result);
+    $this->assertNotContains($act[5], $result);
+    $this->assertNotContains($act[6], $result);
+
+    $result = Activity::get(FALSE)->addSelect('id')
+      ->addWhere('activity_date_time', '=', 'next.month')
+      ->execute()->column('id');
+    $this->assertNotContains($act[0], $result);
+    $this->assertNotContains($act[1], $result);
+    $this->assertNotContains($act[2], $result);
+    $this->assertContains($act[4], $result);
+    $this->assertNotContains($act[5], $result);
+    $this->assertNotContains($act[6], $result);
+
+    $result = Activity::get(FALSE)->addSelect('id')
+      ->addWhere('activity_date_time', 'BETWEEN', ['previous.year', 'this.year'])
+      ->execute()->column('id');
+    $this->assertContains($act[2], $result);
+    $this->assertContains($act[3], $result);
+    $this->assertNotContains($act[0], $result);
+    $this->assertNotContains($act[6], $result);
   }
 
 }

@@ -83,15 +83,35 @@ function civicrm_api3_order_create($params) {
     $priceSetID = NULL;
     CRM_Contribute_BAO_Contribution::checkLineItems($params);
     foreach ($params['line_items'] as $lineItems) {
-      $entityParams = CRM_Utils_Array::value('params', $lineItems, []);
+      $entityParams = $lineItems['params'] ?? [];
       if (!empty($entityParams) && !empty($lineItems['line_item'])) {
         $item = reset($lineItems['line_item']);
         $entity = str_replace('civicrm_', '', $item['entity_table']);
       }
+
       if ($entityParams) {
-        if (in_array($entity, ['participant', 'membership'])) {
+        $supportedEntity = TRUE;
+        switch ($entity) {
+          case 'participant':
+            if (isset($entityParams['participant_status_id'])
+              && (!CRM_Event_BAO_ParticipantStatusType::getIsValidStatusForClass($entityParams['participant_status_id'], 'Pending'))) {
+              throw new CiviCRM_API3_Exception('Creating a participant via the Order API with a non "pending" status is not supported');
+            }
+            $entityParams['participant_status_id'] = $entityParams['participant_status_id'] ?? 'Pending from incomplete transaction';
+            $entityParams['status_id'] = $entityParams['participant_status_id'];
+            break;
+
+          case 'membership':
+            $entityParams['status_id'] = 'Pending';
+            break;
+
+          default:
+            // Don't create any related entities. We might want to support eg. Pledge one day?
+            $supportedEntity = FALSE;
+            break;
+        }
+        if ($supportedEntity) {
           $entityParams['skipLineItem'] = TRUE;
-          $entityParams['status_id'] = ($entity === 'participant' ? 'Pending from incomplete transaction' : 'Pending');
           $entityResult = civicrm_api3($entity, 'create', $entityParams);
           $params['contribution_mode'] = $entity;
           $entityIds[] = $params[$entity . '_id'] = $entityResult['id'];
@@ -99,13 +119,11 @@ function civicrm_api3_order_create($params) {
             $items['entity_id'] = $entityResult['id'];
           }
         }
-        else {
-          // pledge payment
-        }
       }
+
       if (empty($priceSetID)) {
         $item = reset($lineItems['line_item']);
-        $priceSetID = civicrm_api3('PriceField', 'getvalue', [
+        $priceSetID = (int) civicrm_api3('PriceField', 'getvalue', [
           'return' => 'price_set_id',
           'id' => $item['price_field_id'],
         ]);
@@ -142,10 +160,10 @@ function civicrm_api3_order_create($params) {
       elseif ($entity == 'membership') {
         $paymentParams['isSkipLineItem'] = TRUE;
       }
-      $payments = civicrm_api3($entity . '_payment', 'create', $paymentParams);
+      civicrm_api3($entity . '_payment', 'create', $paymentParams);
     }
   }
-  return civicrm_api3_create_success(CRM_Utils_Array::value('values', $contribution), $params, 'Order', 'create');
+  return civicrm_api3_create_success($contribution['values'] ?? [], $params, 'Order', 'create');
 }
 
 /**
@@ -183,7 +201,6 @@ function civicrm_api3_order_cancel($params) {
   $contributionStatuses = CRM_Contribute_PseudoConstant::contributionStatus(NULL, 'name');
   $params['contribution_status_id'] = array_search('Cancelled', $contributionStatuses);
   $result = civicrm_api3('Contribution', 'create', $params);
-  CRM_Contribute_BAO_Contribution::transitionComponents($params);
   return civicrm_api3_create_success($result['values'], $params, 'Order', 'cancel');
 }
 

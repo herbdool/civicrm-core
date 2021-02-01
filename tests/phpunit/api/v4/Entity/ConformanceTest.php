@@ -20,7 +20,6 @@
 namespace api\v4\Entity;
 
 use Civi\Api4\Entity;
-use api\v4\Traits\TableDropperTrait;
 use api\v4\UnitTestCase;
 
 /**
@@ -28,7 +27,7 @@ use api\v4\UnitTestCase;
  */
 class ConformanceTest extends UnitTestCase {
 
-  use TableDropperTrait;
+  use \api\v4\Traits\TableDropperTrait;
   use \api\v4\Traits\OptionCleanupTrait {
     setUp as setUpOptionCleanup;
   }
@@ -70,6 +69,14 @@ class ConformanceTest extends UnitTestCase {
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function getEntitiesHitech() {
+    // Ensure all components are enabled so their entities show up
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviEvent');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviGrant');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviCase');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviContribute');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviCampaign');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviPledge');
+    \CRM_Core_BAO_ConfigSetting::enableComponent('CiviReport');
     return $this->toDataProviderArray(Entity::get(FALSE)->execute()->column('name'));
   }
 
@@ -87,7 +94,7 @@ class ConformanceTest extends UnitTestCase {
     $manual['remove'] = ['CustomValue'];
 
     $scanned = [];
-    $srcDir = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+    $srcDir = dirname(__DIR__, 5);
     foreach ((array) glob("$srcDir/Civi/Api4/*.php") as $name) {
       $scanned[] = preg_replace('/\.php/', '', basename($name));
     }
@@ -111,17 +118,20 @@ class ConformanceTest extends UnitTestCase {
   /**
    * @param string $entity
    *   Ex: 'Contact'
+   *
    * @dataProvider getEntitiesLotech
+   *
+   * @throws \API_Exception
    */
-  public function testConformance($entity) {
+  public function testConformance($entity): void {
     $entityClass = 'Civi\Api4\\' . $entity;
 
+    $this->checkEntityInfo($entityClass);
     $actions = $this->checkActions($entityClass);
 
     // Go no further if it's not a CRUD entity
     if (array_diff(['get', 'create', 'update', 'delete'], array_keys($actions))) {
-      $this->markTestSkipped("The entity \"$entity\" does not ");
-      return;
+      $this->markTestSkipped("The API \"$entity\" does not implement CRUD actions");
     }
 
     $this->checkFields($entityClass, $entity);
@@ -136,8 +146,22 @@ class ConformanceTest extends UnitTestCase {
   }
 
   /**
-   * @param string $entityClass
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
+   */
+  protected function checkEntityInfo($entityClass): void {
+    $info = $entityClass::getInfo();
+    $this->assertNotEmpty($info['name']);
+    $this->assertNotEmpty($info['title']);
+    $this->assertNotEmpty($info['title_plural']);
+    $this->assertNotEmpty($info['type']);
+    $this->assertNotEmpty($info['description']);
+  }
+
+  /**
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
    * @param string $entity
+   *
+   * @throws \API_Exception
    */
   protected function checkFields($entityClass, $entity) {
     $fields = $entityClass::getFields(FALSE)
@@ -152,11 +176,13 @@ class ConformanceTest extends UnitTestCase {
   }
 
   /**
-   * @param string $entityClass
+   * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
    *
    * @return array
+   *
+   * @throws \API_Exception
    */
-  protected function checkActions($entityClass) {
+  protected function checkActions($entityClass): array {
     $actions = $entityClass::getActions(FALSE)
       ->execute()
       ->indexBy('name');
@@ -191,7 +217,7 @@ class ConformanceTest extends UnitTestCase {
    * @param \Civi\Api4\Generic\AbstractEntity|string $entityClass
    * @param int $id
    */
-  protected function checkUpdateFailsFromCreate($entityClass, $id) {
+  protected function checkUpdateFailsFromCreate($entityClass, $id): void {
     $exceptionThrown = '';
     try {
       $entityClass::create(FALSE)
@@ -224,7 +250,7 @@ class ConformanceTest extends UnitTestCase {
    * @param int $id
    * @param string $entity
    */
-  protected function checkGetCount($entityClass, $id, $entity) {
+  protected function checkGetCount($entityClass, $id, $entity): void {
     $getResult = $entityClass::get(FALSE)
       ->addWhere('id', '=', $id)
       ->selectRowCount()

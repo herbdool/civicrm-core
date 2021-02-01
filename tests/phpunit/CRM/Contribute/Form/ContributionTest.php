@@ -17,6 +17,7 @@
  * @group headless
  */
 class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
+  use CRMTraits_PCP_PCPTestTrait;
 
   protected $_individualId;
   protected $_contribution;
@@ -80,7 +81,7 @@ class CRM_Contribute_Form_ContributionTest extends CiviUnitTestCase {
     parent::setUp();
     $this->_userId = $this->createLoggedInUser();
 
-    $this->_individualId = $this->individualCreate();
+    $this->_individualId = $this->ids['contact'][0] = $this->individualCreate();
     $this->_params = [
       'contact_id' => $this->_individualId,
       'receive_date' => '20120511',
@@ -810,6 +811,35 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   }
 
   /**
+   * Test submitting the back office contribution form with pcp data.
+   *
+   * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
+   * @throws \Civi\Payment\Exception\PaymentProcessorException
+   */
+  public function testSubmitWithPCP(): void {
+    $mut = new CiviMailUtils($this, TRUE);
+    $mut->clearMessages();
+    $params = $this->pcpParams();
+    $pcpID = $this->createPCPBlock($params);
+    $form = new CRM_Contribute_Form_Contribution();
+    $form->testSubmit([
+      'financial_type_id' => 3,
+      'contact_id' => $this->_individualId,
+      'payment_instrument_id' => CRM_Core_PseudoConstant::getKey('CRM_Contribute_BAO_Contribution', 'payment_instrument_id', 'Check'),
+      'contribution_status_id' => 1,
+      'total_amount' => 5,
+      'pcp_made_through_id' => $pcpID,
+      'pcp_display_in_roll' => '1',
+      'pcp_roll_nickname' => 'Dobby',
+      'pcp_personal_note' => 'I wuz here',
+    ], CRM_Core_Action::ADD);
+    $softCredit = $this->callAPISuccessGetSingle('ContributionSoft', []);
+    $this->assertEquals('Dobby', $softCredit['pcp_roll_nickname']);
+    $mut->checkMailLog(['Personal Campaign Page Owner Notification']);
+  }
+
+  /**
    * Test the submit function on the contribution page.
    */
   public function testSubmitWithNote() {
@@ -1043,7 +1073,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   public function testSubmitSaleTax($thousandSeparator) {
     $this->setCurrencySeparators($thousandSeparator);
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
     $form = new CRM_Contribute_Form_Contribution();
 
     $form->testSubmit([
@@ -1093,7 +1123,7 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
    */
   public function testSubmitWithOutSaleTax() {
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
     $form = new CRM_Contribute_Form_Contribution();
 
     $form->testSubmit([
@@ -1134,8 +1164,8 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   public function testReSubmitSaleTax($thousandSeparator) {
     $this->setCurrencySeparators($thousandSeparator);
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
-    list($form, $contribution) = $this->doInitialSubmit();
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
+    [$form, $contribution] = $this->doInitialSubmit();
     $this->assertEquals(11000, $contribution['total_amount']);
     $this->assertEquals(1000, $contribution['tax_amount']);
     $this->assertEquals(11000, $contribution['net_amount']);
@@ -1195,8 +1225,8 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
   public function testReSubmitSaleTaxAlteredAmount($thousandSeparator) {
     $this->setCurrencySeparators($thousandSeparator);
     $this->enableTaxAndInvoicing();
-    $this->relationForFinancialTypeWithFinancialAccount($this->_financialTypeId);
-    list($form, $contribution) = $this->doInitialSubmit();
+    $this->addTaxAccountToFinancialType($this->_financialTypeId);
+    [$form, $contribution] = $this->doInitialSubmit();
 
     $mut = new CiviMailUtils($this, TRUE);
     // Testing here if when we edit something trivial like adding a check_number tax, net, total amount stay the same:
@@ -1746,7 +1776,274 @@ Price Field - Price Field 1        1   $ 100.00      $ 100.00
 
     // The page contents load later by ajax, so there's just the surrounding
     // html available now, but we can check at least one thing while we're here.
-    $this->assertStringContainsString("selectedTab = 'widget';", $contents);
+    $this->assertContains("mainTabContainer", $contents);
+  }
+
+  /**
+   * Test AdditionalInfo::postProcessCommon
+   * @dataProvider additionalInfoProvider
+   * @param array $input
+   * @param array $expectedFormatted
+   */
+  public function testAdditionalInfoPostProcessCommon(array $input, array $expectedFormatted) {
+    $formatted = [];
+    $dummy = new CRM_Contribute_Form_AdditionalInfo();
+    CRM_Contribute_Form_AdditionalInfo::postProcessCommon($input, $formatted, $dummy);
+    $this->assertEquals($expectedFormatted, $formatted);
+  }
+
+  /**
+   * Dataprovider for testAdditionalInfoPostProcessCommon
+   * @return array
+   */
+  public function additionalInfoProvider(): array {
+    return [
+      'no-date' => [
+        'input' => [
+          'qfKey' => 'CRMContributeFormContributionu2pbzqqmz74oscck4ss4osccw4wgccc884wkk4ws0o8wgss4w_8953',
+          'entryURL' => 'http://example.org/civicrm/contact/view/contribution?reset=1&amp;action=add&amp;cid=1&amp;context=contribution',
+          'check_number' => '',
+          'frequency_interval' => '1',
+          'hidden_AdditionalDetail' => '1',
+          'contact_id' => '1',
+          'financial_type_id' => '1',
+          'payment_instrument_id' => '4',
+          'trxn_id' => '',
+          'from_email_address' => '2',
+          'contribution_status_id' => '1',
+          // This is unused here but is iffy to put in a dataprovider
+          'receive_date' => '2021-01-14 11:12:13',
+          'receipt_date' => '',
+          'cancel_date' => '',
+          'cancel_reason' => '',
+          'price_set_id' => '',
+          'total_amount' => 10,
+          'currency' => 'USD',
+          'source' => 'a source',
+          'soft_credit_contact_id' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'soft_credit_amount' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'soft_credit_type' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'sct_default_id' => '3',
+          'MAX_FILE_SIZE' => '2097152',
+          'ip_address' => '127.0.0.1',
+          'price_1' => [
+            1 => 1,
+          ],
+          'amount' => 10,
+        ],
+        'expected' => [
+          'non_deductible_amount' => NULL,
+          'total_amount' => 10,
+          'fee_amount' => NULL,
+          'trxn_id' => '',
+          'invoice_id' => NULL,
+          'creditnote_id' => NULL,
+          'campaign_id' => NULL,
+          'contribution_page_id' => NULL,
+          'thankyou_date' => NULL,
+          'custom' => [],
+        ],
+      ],
+
+      'date-no-time' => [
+        'input' => [
+          'qfKey' => 'CRMContributeFormContributionu2pbzqqmz74oscck4ss4osccw4wgccc884wkk4ws0o8wgss4w_8953',
+          'entryURL' => 'http://example.org/civicrm/contact/view/contribution?reset=1&amp;action=add&amp;cid=1&amp;context=contribution',
+          'id' => '40',
+          'frequency_interval' => '1',
+          'hidden_AdditionalDetail' => '1',
+          'thankyou_date' => '2021-01-14',
+          'non_deductible_amount' => '0.00',
+          'fee_amount' => '0.00',
+          'invoice_id' => '',
+          'creditnote_id' => '',
+          'contribution_page_id' => '',
+          'note' => '',
+          'contact_id' => '1',
+          'financial_type_id' => '1',
+          'from_email_address' => '2',
+          'contribution_status_id' => '1',
+          // This is unused here but is iffy to put in a dataprovider
+          'receive_date' => '2021-01-14 11:12:13',
+          'receipt_date' => '',
+          'cancel_date' => '',
+          'cancel_reason' => '',
+          'price_set_id' => '',
+          'total_amount' => '10.00',
+          'currency' => 'USD',
+          'source' => 'a source',
+          'soft_credit_contact_id' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'soft_credit_amount' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'soft_credit_type' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'sct_default_id' => '3',
+          'MAX_FILE_SIZE' => '2097152',
+          'ip_address' => '127.0.0.1',
+          // leaving out since don't want to enforce string 'null' in a test
+          //'tax_amount' => 'null',
+        ],
+        'expected' => [
+          'non_deductible_amount' => '0.00',
+          'total_amount' => '10.00',
+          'fee_amount' => '0.00',
+          'trxn_id' => NULL,
+          'invoice_id' => '',
+          'creditnote_id' => '',
+          'campaign_id' => NULL,
+          'contribution_page_id' => NULL,
+          'thankyou_date' => '20210114000000',
+          'custom' => [],
+        ],
+      ],
+
+      'date-and-time' => [
+        'input' => [
+          'qfKey' => 'CRMContributeFormContributionu2pbzqqmz74oscck4ss4osccw4wgccc884wkk4ws0o8wgss4w_8953',
+          'entryURL' => 'http://example.org/civicrm/contact/view/contribution?reset=1&amp;action=add&amp;cid=1&amp;context=contribution',
+          'id' => '40',
+          'frequency_interval' => '1',
+          'hidden_AdditionalDetail' => '1',
+          'thankyou_date' => '2021-01-14 10:11:12',
+          'non_deductible_amount' => '0.00',
+          'fee_amount' => '0.00',
+          'invoice_id' => '',
+          'creditnote_id' => '',
+          'contribution_page_id' => '',
+          'note' => '',
+          'contact_id' => '1',
+          'financial_type_id' => '1',
+          'from_email_address' => '2',
+          'contribution_status_id' => '1',
+          // This is unused here but is iffy to put in a dataprovider
+          'receive_date' => '2021-01-14 11:12:13',
+          'receipt_date' => '',
+          'cancel_date' => '',
+          'cancel_reason' => '',
+          'price_set_id' => '',
+          'total_amount' => '10.00',
+          'currency' => 'USD',
+          'source' => 'a source',
+          'soft_credit_contact_id' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'soft_credit_amount' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'soft_credit_type' => [
+            1 => '',
+            2 => '',
+            3 => '',
+            4 => '',
+            5 => '',
+            6 => '',
+            7 => '',
+            8 => '',
+            9 => '',
+            10 => '',
+          ],
+          'sct_default_id' => '3',
+          'MAX_FILE_SIZE' => '2097152',
+          'ip_address' => '127.0.0.1',
+          // leaving out since don't want to enforce string 'null' in a test
+          //'tax_amount' => 'null',
+        ],
+        'expected' => [
+          'non_deductible_amount' => '0.00',
+          'total_amount' => '10.00',
+          'fee_amount' => '0.00',
+          'trxn_id' => NULL,
+          'invoice_id' => '',
+          'creditnote_id' => '',
+          'campaign_id' => NULL,
+          'contribution_page_id' => NULL,
+          'thankyou_date' => '20210114101112',
+          'custom' => [],
+        ],
+      ],
+    ];
   }
 
 }

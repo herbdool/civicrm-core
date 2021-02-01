@@ -206,7 +206,7 @@ class CRM_Report_Form_Contribute_SoftCredit extends CRM_Report_Form {
             'title' => ts('Financial Type'),
             'type' => CRM_Utils_Type::T_INT,
             'operatorType' => CRM_Report_Form::OP_MULTISELECT,
-            'options' => CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes(),
+            'options' => CRM_Contribute_BAO_Contribution::buildOptions('financial_type_id', 'search'),
           ],
         ],
         'grouping' => 'softcredit-fields',
@@ -567,7 +567,7 @@ GROUP BY   {$this->_aliases['civicrm_contribution']}.currency
           $this->_absoluteUrl
         );
         $rows[$rowNum]['civicrm_contact_display_name_creditor_link'] = $url;
-        $rows[$rowNum]['civicrm_contact_display_name_creditor_hover'] = ts("view contact summary");
+        $rows[$rowNum]['civicrm_contact_display_name_creditor_hover'] = ts("View contact summary");
       }
 
       // make subtotals look nicer

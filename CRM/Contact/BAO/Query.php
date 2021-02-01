@@ -214,13 +214,6 @@ class CRM_Contact_BAO_Query {
   ];
 
   /**
-   * The cache to translate the option values into labels.
-   *
-   * @var array
-   */
-  public $_options;
-
-  /**
    * Are we in search mode.
    *
    * @var bool
@@ -546,7 +539,6 @@ class CRM_Contact_BAO_Query {
     $this->_whereTables = [];
     $this->_where = [];
     $this->_qill = [];
-    $this->_options = [];
     $this->_cfIDs = [];
     $this->_paramLookup = [];
     $this->_having = [];
@@ -577,7 +569,6 @@ class CRM_Contact_BAO_Query {
       $this->_select = array_merge($this->_select, $this->_customQuery->_select);
       $this->_element = array_merge($this->_element, $this->_customQuery->_element);
       $this->_tables = array_merge($this->_tables, $this->_customQuery->_tables);
-      $this->_options = $this->_customQuery->_options;
     }
     $isForcePrimaryOnly = !empty($apiEntity);
     $this->_whereClause = $this->whereClause($isForcePrimaryOnly);
@@ -4608,7 +4599,6 @@ civicrm_relationship.start_date > {$today}
 
     list($select, $from, $where, $having) = $query->query($count);
 
-    $options = $query->_options;
     if (!empty($query->_permissionWhereClause)) {
       if (!empty($query->_permissionFromClause) && !stripos($from, 'aclContactCache')) {
         $from .= " $query->_permissionFromClause";
@@ -4657,7 +4647,7 @@ civicrm_relationship.start_date > {$today}
       }
       $values[$dao->$entityIDField] = $val;
     }
-    return [$values, $options];
+    return [$values];
   }
 
   /**
@@ -5064,15 +5054,10 @@ civicrm_relationship.start_date > {$today}
 
       if (CRM_Core_Permission::check('access deleted contacts')) {
         if (!$onlyDeleted) {
-          $this->_permissionWhereClause = str_replace('( 1 )', '(contact_a.is_deleted = 0)', $this->_permissionWhereClause);
+          $this->_permissionWhereClause .= ' AND (contact_a.is_deleted = 0)';
         }
         else {
-          if ($this->_permissionWhereClause === '( 1 )') {
-            $this->_permissionWhereClause = str_replace('( 1 )', '(contact_a.is_deleted)', $this->_permissionWhereClause);
-          }
-          else {
-            $this->_permissionWhereClause .= " AND (contact_a.is_deleted) ";
-          }
+          $this->_permissionWhereClause .= " AND (contact_a.is_deleted) ";
         }
       }
 
@@ -5643,7 +5628,7 @@ civicrm_relationship.start_date > {$today}
         return $clause;
 
       case 'RLIKE':
-        return " {$clause} BINARY '{$value}' ";
+        return " CAST({$field} AS BINARY) RLIKE BINARY '{$value}' ";
 
       case 'IN':
       case 'NOT IN':
@@ -5829,11 +5814,23 @@ AND   displayRelType.is_active = 1
       $this->_qill[0][] = $iqill;
     }
     if (strpos($from, $qcache['from']) === FALSE) {
-      // lets replace all the INNER JOIN's in the $from so we dont exclude other data
-      // this happens when we have an event_type in the quert (CRM-7969)
-      $from = str_replace("INNER JOIN", "LEFT JOIN", $from);
-      $from .= $qcache['from'];
+      if (strpos($from, "INNER JOIN") !== FALSE) {
+        // lets replace all the INNER JOIN's in the $from so we dont exclude other data
+        // this happens when we have an event_type in the quert (CRM-7969)
+        $from = str_replace("INNER JOIN", "LEFT JOIN", $from);
+        // Make sure the relationship join right after the FROM and other joins afterwards.
+        // This gives us the possibility to change the join on civicrm case.
+        $from = preg_replace("/LEFT JOIN/", $qcache['from'] . " LEFT JOIN", $from, 1);
+      }
+      else {
+        $from .= $qcache['from'];
+      }
       $where = $qcache['where'];
+      if (!empty($this->_tables['civicrm_case'])) {
+        // Change the join on CiviCRM case so that it joins on the right contac from the relationship.
+        $from = str_replace("ON civicrm_case_contact.contact_id = contact_a.id", "ON civicrm_case_contact.contact_id = transform_temp.contact_id", $from);
+        $where .= " AND displayRelType.case_id = civicrm_case_contact.case_id ";
+      }
       if (!empty($this->_permissionFromClause) && !stripos($from, 'aclContactCache')) {
         $from .= " $this->_permissionFromClause";
       }
@@ -6939,6 +6936,17 @@ AND   displayRelType.is_active = 1
       }
     }
     return $field;
+  }
+
+  /**
+   * Get the field datatype, using the type in the database rather than the pseudofield, if a pseudofield.
+   *
+   * @param string $fieldName
+   *
+   * @return string
+   */
+  public function getDataTypeForRealField($fieldName) {
+    return CRM_Utils_Type::typeToString($this->getMetadataForRealField($fieldName)['type']);
   }
 
   /**

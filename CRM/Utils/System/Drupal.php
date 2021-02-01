@@ -317,9 +317,12 @@ class CRM_Utils_System_Drupal extends CRM_Utils_System_DrupalBase {
 
     $config = CRM_Core_Config::singleton();
 
-    $dbDrupal = DB::connect($config->userFrameworkDSN);
-    if (DB::isError($dbDrupal)) {
-      throw new CRM_Core_Exception("Cannot connect to drupal db via $config->userFrameworkDSN, " . $dbDrupal->getMessage());
+    $ufDSN = CRM_Utils_SQL::autoSwitchDSN($config->userFrameworkDSN);
+    try {
+      $dbDrupal = DB::connect($ufDSN);
+    }
+    catch (Exception $e) {
+      throw new CRM_Core_Exception("Cannot connect to drupal db via $ufDSN, " . $e->getMessage());
     }
 
     $account = $userUid = $userMail = NULL;
@@ -490,10 +493,6 @@ AND    u.status = 1
     // @ to suppress notices eg 'DRUPALFOO already defined'.
     @drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
 
-    // explicitly setting error reporting, since we cannot handle drupal related notices
-    // @todo 1 = E_ERROR, but more to the point setting error reporting deep in code
-    // causes grief with debugging scripts
-    error_reporting(1);
     if (!function_exists('module_exists')) {
       if ($throwError) {
         throw new Exception('Sorry, could not load drupal bootstrap.');

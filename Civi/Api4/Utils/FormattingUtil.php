@@ -19,6 +19,8 @@
 
 namespace Civi\Api4\Utils;
 
+use Civi\Api4\Query\SqlExpression;
+
 require_once 'api/v3/utils.php';
 
 class FormattingUtil {
@@ -46,7 +48,7 @@ class FormattingUtil {
         if ($value === 'null') {
           $value = 'Null';
         }
-        self::formatInputValue($value, $name, $field, 'create');
+        self::formatInputValue($value, $name, $field);
         // Ensure we have an array for serialized fields
         if (!empty($field['serialize'] && !is_array($value))) {
           $value = (array) $value;
@@ -80,21 +82,23 @@ class FormattingUtil {
    * @param $value
    * @param string $fieldName
    * @param array $fieldSpec
-   * @param string $action
+   * @param string $operator (only for 'get' actions)
+   * @param int $index (for recursive loops)
    * @throws \API_Exception
    * @throws \CRM_Core_Exception
    */
-  public static function formatInputValue(&$value, $fieldName, $fieldSpec, $action = 'get') {
+  public static function formatInputValue(&$value, $fieldName, $fieldSpec, &$operator = NULL, $index = NULL) {
     // Evaluate pseudoconstant suffix
     $suffix = strpos($fieldName, ':');
     if ($suffix) {
-      $options = self::getPseudoconstantList($fieldSpec['entity'], $fieldSpec['name'], substr($fieldName, $suffix + 1), $action);
+      $options = self::getPseudoconstantList($fieldSpec, substr($fieldName, $suffix + 1), [], $operator ? 'get' : 'create');
       $value = self::replacePseudoconstant($options, $value, TRUE);
       return;
     }
     elseif (is_array($value)) {
+      $i = 0;
       foreach ($value as &$val) {
-        self::formatInputValue($val, $fieldName, $fieldSpec, $action);
+        self::formatInputValue($val, $fieldName, $fieldSpec, $operator, $i++);
       }
       return;
     }
@@ -113,17 +117,67 @@ class FormattingUtil {
 
     switch ($fieldSpec['data_type'] ?? NULL) {
       case 'Timestamp':
-        $value = date('Y-m-d H:i:s', strtotime($value));
+        $value = self::formatDateValue('Y-m-d H:i:s', $value, $operator, $index);
         break;
 
       case 'Date':
-        $value = date('Ymd', strtotime($value));
+        $value = self::formatDateValue('Ymd', $value, $operator, $index);
         break;
     }
 
     $hic = \CRM_Utils_API_HTMLInputCoder::singleton();
-    if (!$hic->isSkippedField($fieldSpec['name'])) {
+    if (is_string($value) && !$hic->isSkippedField($fieldSpec['name'])) {
       $value = $hic->encodeValue($value);
+    }
+  }
+
+  /**
+   * Parse date expressions.
+   *
+   * Expands relative date range expressions, modifying the sql operator if necessary
+   *
+   * @param $format
+   * @param $value
+   * @param $operator
+   * @param $index
+   * @return array|string
+   */
+  private static function formatDateValue($format, $value, &$operator = NULL, $index = NULL) {
+    // Non-relative dates (or if no search operator)
+    if (!$operator || !array_key_exists($value, \CRM_Core_OptionGroup::values('relative_date_filters'))) {
+      return date($format, strtotime($value));
+    }
+    if (isset($index) && !strstr($operator, 'BETWEEN')) {
+      throw new \API_Exception("Relative dates cannot be in an array using the $operator operator.");
+    }
+    [$dateFrom, $dateTo] = \CRM_Utils_Date::getFromTo($value);
+    switch ($operator) {
+      // Convert relative date filters to use BETWEEN/NOT BETWEEN operator
+      case '=':
+      case '!=':
+      case '<>':
+      case 'LIKE':
+      case 'NOT LIKE':
+        $operator = ($operator === '=' || $operator === 'LIKE') ? 'BETWEEN' : 'NOT BETWEEN';
+        return [self::formatDateValue($format, $dateFrom), self::formatDateValue($format, $dateTo)];
+
+      // Less-than or greater-than-equal-to comparisons use the lower value
+      case '<':
+      case '>=':
+        return self::formatDateValue($format, $dateFrom);
+
+      // Greater-than or less-than-equal-to comparisons use the higher value
+      case '>':
+      case '<=':
+        return self::formatDateValue($format, $dateTo);
+
+      // For BETWEEN expressions, we are already inside a loop of the 2 values, so give the lower value if index=0, higher value if index=1
+      case 'BETWEEN':
+      case 'NOT BETWEEN':
+        return self::formatDateValue($format, $index ? $dateTo : $dateFrom);
+
+      default:
+        throw new \API_Exception("Relative dates cannot be used with the $operator operator.");
     }
   }
 
@@ -134,39 +188,47 @@ class FormattingUtil {
    * @param array $fields
    * @param string $entity
    * @param string $action
+   * @param array $selectAliases
    * @throws \API_Exception
    * @throws \CRM_Core_Exception
    */
-  public static function formatOutputValues(&$results, $fields, $entity, $action = 'get') {
+  public static function formatOutputValues(&$results, $fields, $entity, $action = 'get', $selectAliases = []) {
     $fieldOptions = [];
     foreach ($results as &$result) {
       $contactTypePaths = [];
-      foreach ($result as $fieldExpr => $value) {
-        $field = $fields[$fieldExpr] ?? NULL;
-        $dataType = $field['data_type'] ?? ($fieldExpr == 'id' ? 'Integer' : NULL);
-        if ($field) {
-          // Evaluate pseudoconstant suffixes
-          $suffix = strrpos($fieldExpr, ':');
-          if ($suffix) {
-            $fieldName = empty($field['custom_field_id']) ? $field['name'] : 'custom_' . $field['custom_field_id'];
-            $fieldOptions[$fieldExpr] = $fieldOptions[$fieldExpr] ?? self::getPseudoconstantList($field['entity'], $fieldName, substr($fieldExpr, $suffix + 1), $result, $action);
-            $dataType = NULL;
+      foreach ($result as $key => $value) {
+        $fieldExpr = SqlExpression::convert($selectAliases[$key] ?? $key);
+        $fieldName = \CRM_Utils_Array::first($fieldExpr->getFields());
+        $field = $fieldName && isset($fields[$fieldName]) ? $fields[$fieldName] : NULL;
+        $dataType = $field['data_type'] ?? ($fieldName == 'id' ? 'Integer' : NULL);
+        // If Sql Function e.g. GROUP_CONCAT or COUNT wants to do its own formatting, apply and skip dataType conversion
+        if (method_exists($fieldExpr, 'formatOutputValue') && is_string($value)) {
+          $result[$key] = $value = $fieldExpr->formatOutputValue($value);
+          $dataType = NULL;
+        }
+        if (!$field) {
+          continue;
+        }
+        // Evaluate pseudoconstant suffixes
+        $suffix = strrpos($fieldName, ':');
+        if ($suffix) {
+          $fieldOptions[$fieldName] = $fieldOptions[$fieldName] ?? self::getPseudoconstantList($field, substr($fieldName, $suffix + 1), $result, $action);
+          $dataType = NULL;
+        }
+        if ($fieldExpr->supportsExpansion) {
+          if (!empty($field['serialize']) && is_string($value)) {
+            $value = \CRM_Core_DAO::unSerializeField($value, $field['serialize']);
           }
-          if (!empty($field['serialize'])) {
-            if (is_string($value)) {
-              $value = \CRM_Core_DAO::unSerializeField($value, $field['serialize']);
-            }
-          }
-          if (isset($fieldOptions[$fieldExpr])) {
-            $value = self::replacePseudoconstant($fieldOptions[$fieldExpr], $value);
-          }
-          // Keep track of contact types for self::contactFieldsToRemove
-          if ($value && isset($field['entity']) && $field['entity'] === 'Contact' && $field['name'] === 'contact_type') {
-            $prefix = strrpos($fieldExpr, '.');
-            $contactTypePaths[$prefix ? substr($fieldExpr, 0, $prefix + 1) : ''] = $value;
+          if (isset($fieldOptions[$fieldName])) {
+            $value = self::replacePseudoconstant($fieldOptions[$fieldName], $value);
           }
         }
-        $result[$fieldExpr] = self::convertDataType($value, $dataType);
+        // Keep track of contact types for self::contactFieldsToRemove
+        if ($value && isset($field['entity']) && $field['entity'] === 'Contact' && $field['name'] === 'contact_type') {
+          $prefix = strrpos($fieldName, '.');
+          $contactTypePaths[$prefix ? substr($fieldName, 0, $prefix + 1) : ''] = $value;
+        }
+        $result[$key] = self::convertDataType($value, $dataType);
       }
       // Remove inapplicable contact fields
       foreach ($contactTypePaths as $prefix => $contactType) {
@@ -178,9 +240,7 @@ class FormattingUtil {
   /**
    * Retrieves pseudoconstant option list for a field.
    *
-   * @param string $entity
-   *   Name of api entity
-   * @param string $fieldName
+   * @param array $field
    * @param string $valueType
    *   name|label|abbr from self::$pseudoConstantContexts
    * @param array $params
@@ -189,27 +249,28 @@ class FormattingUtil {
    * @return array
    * @throws \API_Exception
    */
-  public static function getPseudoconstantList($entity, $fieldName, $valueType, $params = [], $action = 'get') {
+  public static function getPseudoconstantList($field, $valueType, $params = [], $action = 'get') {
     $context = self::$pseudoConstantContexts[$valueType] ?? NULL;
     // For create actions, only unique identifiers can be used.
     // For get actions any valid suffix is ok.
     if (($action === 'create' && !$context) || !in_array($valueType, self::$pseudoConstantSuffixes, TRUE)) {
       throw new \API_Exception('Illegal expression');
     }
-    $baoName = $context ? CoreUtil::getBAOFromApiName($entity) : NULL;
+    $baoName = $context ? CoreUtil::getBAOFromApiName($field['entity']) : NULL;
     // Use BAO::buildOptions if possible
     if ($baoName) {
+      $fieldName = empty($field['custom_field_id']) ? $field['name'] : 'custom_' . $field['custom_field_id'];
       $options = $baoName::buildOptions($fieldName, $context, $params);
     }
     // Fallback for option lists that exist in the api but not the BAO
     if (!isset($options) || $options === FALSE) {
-      $options = civicrm_api4($entity, 'getFields', ['action' => $action, 'loadOptions' => ['id', $valueType], 'where' => [['name', '=', $fieldName]]])[0]['options'] ?? NULL;
+      $options = civicrm_api4($field['entity'], 'getFields', ['action' => $action, 'loadOptions' => ['id', $valueType], 'where' => [['name', '=', $field['name']]]])[0]['options'] ?? NULL;
       $options = $options ? array_column($options, $valueType, 'id') : $options;
     }
     if (is_array($options)) {
       return $options;
     }
-    throw new \API_Exception("No option list found for '$fieldName'");
+    throw new \API_Exception("No option list found for '{$field['name']}'");
   }
 
   /**

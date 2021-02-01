@@ -45,26 +45,15 @@ class CRM_PCP_BAO_PCPTest extends CiviUnitTestCase {
     $this->assertEquals($params['is_active'], $pcpBlock->is_active, 'Check for is_active.');
   }
 
-  public function testAddPCP() {
-    $blockParams = $this->pcpBlockParams();
-    $pcpBlock = CRM_PCP_BAO_PCPBlock::create($blockParams);
-
+  /**
+   * Basic create test.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testCreatePCP() {
     $params = $this->pcpParams();
-    $params['pcp_block_id'] = $pcpBlock->id;
-
-    $pcp = CRM_PCP_BAO_PCP::create($params);
-
-    $this->assertInstanceOf('CRM_PCP_DAO_PCP', $pcp, 'Check for created object');
-    $this->assertEquals($params['contact_id'], $pcp->contact_id, 'Check for entity table.');
-    $this->assertEquals($params['status_id'], $pcp->status_id, 'Check for status.');
-    $this->assertEquals($params['title'], $pcp->title, 'Check for title.');
-    $this->assertEquals($params['intro_text'], $pcp->intro_text, 'Check for intro_text.');
-    $this->assertEquals($params['page_text'], $pcp->page_text, 'Check for page_text.');
-    $this->assertEquals($params['donate_link_text'], $pcp->donate_link_text, 'Check for donate_link_text.');
-    $this->assertEquals($params['is_thermometer'], $pcp->is_thermometer, 'Check for is_thermometer.');
-    $this->assertEquals($params['is_honor_roll'], $pcp->is_honor_roll, 'Check for is_honor_roll.');
-    $this->assertEquals($params['goal_amount'], $pcp->goal_amount, 'Check for goal_amount.');
-    $this->assertEquals($params['is_active'], $pcp->is_active, 'Check for is_active.');
+    $pcpID = $this->createPCPBlock($params);
+    $this->getAndCheck($params, $pcpID, 'Pcp');
   }
 
   public function testAddPCPNoStatus() {
@@ -121,6 +110,52 @@ class CRM_PCP_BAO_PCPTest extends CiviUnitTestCase {
         ],
       ],
     ], CRM_PCP_BAO_PCP::getPcpDashboardInfo($contactID));
+  }
+
+  /**
+   * Test that hook_civicrm_links is called.
+   */
+  public function testPcpInfoLinksHook() {
+    Civi::dispatcher()->addListener('hook_civicrm_links', [$this, 'hookLinks']);
+
+    // Reset the cache otherwise our hook will not be called
+    CRM_PCP_BAO_PCP::$_pcpLinks = NULL;
+
+    $block = CRM_PCP_BAO_PCPBlock::create($this->pcpBlockParams());
+    $contactID = $this->individualCreate();
+    $contributionPage = $this->callAPISuccessGetSingle('ContributionPage', []);
+    $pcp = $this->callAPISuccess('Pcp', 'create', ['contact_id' => $contactID, 'title' => 'pcp', 'page_id' => $contributionPage['id'], 'pcp_block_id' => $block->id, 'is_active' => TRUE, 'status_id' => 'Approved']);
+
+    $links = CRM_PCP_BAO_PCP::pcplinks($pcp['id']);
+
+    foreach ($links['all'] as $link) {
+      if ($link['name'] == 'URL for this Page') {
+        $found = TRUE;
+        $this->assertEquals($link['url'], 'https://civicrm.org/mih');
+      }
+    }
+
+    $this->assertEquals($found, TRUE);
+  }
+
+  /**
+   * This is the listener for hook_civicrm_links
+   *
+   * Replaces the "URL for this Page" link by a hardcoded link.
+   * This is the listener for hook_civicrm_alterReportVar
+   *
+   * @param \Civi\Core\Event\GenericHookEvent $e
+   *   Should contain 'op', 'links', and other members corresponding
+   *   to the hook parameters.
+   */
+  public function hookLinks(\Civi\Core\Event\GenericHookEvent $e) {
+    if ($e->op == 'pcp.user.actions') {
+      foreach ($e->links['all'] as $key => &$link) {
+        if ($link['name'] == 'URL for this Page') {
+          $e->links['all'][$key]['url'] = 'https://civicrm.org/mih';
+        }
+      }
+    }
   }
 
   /**

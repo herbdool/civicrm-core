@@ -660,7 +660,8 @@ abstract class CRM_Utils_System_DrupalBase extends CRM_Utils_System_Base {
 
     // Get the menu for above URL.
     $item = CRM_Core_Menu::get($path);
-    return !empty($item['is_public']);
+    // In case the URL is not a civicrm page (a drupal page) we set the FE theme to TRUE - covering the corner case
+    return (empty($item) || !empty($item['is_public']));
   }
 
   /**
@@ -698,6 +699,14 @@ abstract class CRM_Utils_System_DrupalBase extends CRM_Utils_System_Base {
       return TRUE;
     }
     return FALSE;
+  }
+
+  /**
+   * Return the CMS-specific url for its permissions page
+   * @return array
+   */
+  public function getCMSPermissionsUrlParams() {
+    return ['ufAccessURL' => url('admin/people/permissions')];
   }
 
 }

@@ -339,6 +339,16 @@ class api_v3_OrderTest extends CiviUnitTestCase {
       'id' => $order['id'],
     ]);
 
+    // Enable the "Pending from approval" status which is not enabled by default
+    $pendingFromApprovalParticipantStatus = civicrm_api3('ParticipantStatusType', 'getsingle', [
+      'name' => "Pending from approval",
+    ]);
+    civicrm_api3('ParticipantStatusType', 'create', [
+      'id' => $pendingFromApprovalParticipantStatus['id'],
+      'name' => "Pending from approval",
+      'is_active' => 1,
+    ]);
+
     $p['line_items'][] = [
       'line_item' => $lineItems,
       'params' => [
@@ -347,6 +357,7 @@ class api_v3_OrderTest extends CiviUnitTestCase {
         'role_id' => 1,
         'register_date' => '2007-07-21 00:00:00',
         'source' => 'Online Event Registration: API Testing',
+        'participant_status_id' => 'Pending from approval',
       ],
     ];
 
@@ -358,12 +369,15 @@ class api_v3_OrderTest extends CiviUnitTestCase {
         'net_amount' => 600,
       ],
     ];
-    $paymentParticipant = [
+    $orderParams = [
       'contribution_id' => $order['id'],
     ];
-    $order = $this->callAPISuccess('order', 'get', $paymentParticipant);
+    $order = $this->callAPISuccess('order', 'get', $orderParams);
     $this->checkPaymentResult($order, $expectedResult);
-    $this->callAPISuccessGetCount('ParticipantPayment', $paymentParticipant, 2);
+    $paymentParticipant = $this->callAPISuccess('ParticipantPayment', 'get', $orderParams)['values'];
+    $this->assertEquals(2, count($paymentParticipant), 'Expected two participant payments');
+    $participant = $this->callAPISuccessGetSingle('Participant', ['participant_id' => end($paymentParticipant)['participant_id']]);
+    $this->assertEquals('Pending from approval', $participant['participant_status']);
     $this->callAPISuccess('Contribution', 'Delete', [
       'id' => $order['id'],
     ]);
@@ -463,59 +477,6 @@ class api_v3_OrderTest extends CiviUnitTestCase {
       ],
     ];
     $this->checkPaymentResult($order, $expectedResult);
-    $this->callAPISuccess('Contribution', 'Delete', [
-      'id' => $contribution['id'],
-    ]);
-  }
-
-  /**
-   * Test cancel order api
-   */
-  public function testCancelWithParticipant() {
-    $event = $this->eventCreate();
-    $this->_eventId = $event['id'];
-    $eventParams = [
-      'id' => $this->_eventId,
-      'financial_type_id' => 4,
-      'is_monetary' => 1,
-    ];
-    $this->callAPISuccess('event', 'create', $eventParams);
-    $participantParams = [
-      'financial_type_id' => 4,
-      'event_id' => $this->_eventId,
-      'role_id' => 1,
-      'status_id' => 1,
-      'fee_currency' => 'USD',
-      'contact_id' => $this->_individualId,
-    ];
-    $participant = $this->callAPISuccess('Participant', 'create', $participantParams);
-    $extraParams = [
-      'contribution_mode' => 'participant',
-      'participant_id' => $participant['id'],
-    ];
-    $contribution = $this->addOrder(TRUE, 100, $extraParams);
-    $paymentParticipant = [
-      'participant_id' => $participant['id'],
-      'contribution_id' => $contribution['id'],
-    ];
-    $this->callAPISuccess('ParticipantPayment', 'create', $paymentParticipant);
-    $params = [
-      'contribution_id' => $contribution['id'],
-    ];
-    $this->callAPISuccess('order', 'cancel', $params);
-    $order = $this->callAPISuccess('Order', 'get', $params);
-    $expectedResult = [
-      $contribution['id'] => [
-        'total_amount' => 100,
-        'contribution_id' => $contribution['id'],
-        'contribution_status' => 'Cancelled',
-        'net_amount' => 100,
-      ],
-    ];
-    $this->checkPaymentResult($order, $expectedResult);
-    $participantPayment = $this->callAPISuccess('ParticipantPayment', 'getsingle', $params);
-    $participant = $this->callAPISuccess('participant', 'get', ['id' => $participantPayment['participant_id']]);
-    $this->assertEquals($participant['values'][$participant['id']]['participant_status'], 'Cancelled');
     $this->callAPISuccess('Contribution', 'Delete', [
       'id' => $contribution['id'],
     ]);

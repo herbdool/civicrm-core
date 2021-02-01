@@ -71,8 +71,8 @@ class CRM_Contact_Task extends CRM_Core_Task {
         self::TASK_EXPORT => array(
           'title' => ts('Export contacts'),
           'class' => array(
-            'CRM_Export_Form_Select',
-            'CRM_Export_Form_Map',
+            'CRM_Contact_Export_Form_Select',
+            'CRM_Contact_Export_Form_Map',
           ),
           'result' => FALSE,
         ),
@@ -234,7 +234,7 @@ class CRM_Contact_Task extends CRM_Core_Task {
       if (CRM_Core_Permission::access('CiviEvent')) {
         self::$_tasks[self::ADD_EVENT] = array(
           'title' => ts('Register participants for event'),
-          'class' => 'CRM_Event_Form_Participant',
+          'class' => 'CRM_Event_Form_Task_Register',
         );
       }
 

@@ -81,6 +81,41 @@ class CRM_Utils_Array {
   }
 
   /**
+   * Recursively searches through a given array for all matches
+   *
+   * @param $collection
+   * @param $predicate
+   * @return array
+   */
+  public static function findAll($collection, $predicate) {
+    $results = [];
+    $search = function($collection) use (&$search, &$results, $predicate) {
+      if (is_array($collection)) {
+        if (is_callable($predicate)) {
+          if ($predicate($collection)) {
+            $results[] = $collection;
+          }
+        }
+        elseif (is_array($predicate)) {
+          if (count(array_intersect_assoc($collection, $predicate)) === count($predicate)) {
+            $results[] = $collection;
+          }
+        }
+        else {
+          if (array_key_exists($predicate, $collection)) {
+            $results[] = $collection;
+          }
+        }
+        foreach ($collection as $item) {
+          $search($item);
+        }
+      }
+    };
+    $search($collection);
+    return $results;
+  }
+
+  /**
    * Wraps and slightly changes the behavior of PHP's array_search().
    *
    * This function reproduces the behavior of array_search() from PHP prior to
@@ -119,26 +154,26 @@ class CRM_Utils_Array {
    *   The array to be serialized.
    * @param int $depth
    *   (optional) Indentation depth counter.
-   * @param string $seperator
+   * @param string $separator
    *   (optional) String to be appended after open/close tags.
    *
    * @return string
    *   XML fragment representing $list.
    */
-  public static function &xml(&$list, $depth = 1, $seperator = "\n") {
+  public static function &xml(&$list, $depth = 1, $separator = "\n") {
     $xml = '';
     foreach ($list as $name => $value) {
       $xml .= str_repeat(' ', $depth * 4);
       if (is_array($value)) {
-        $xml .= "<{$name}>{$seperator}";
-        $xml .= self::xml($value, $depth + 1, $seperator);
+        $xml .= "<{$name}>{$separator}";
+        $xml .= self::xml($value, $depth + 1, $separator);
         $xml .= str_repeat(' ', $depth * 4);
-        $xml .= "</{$name}>{$seperator}";
+        $xml .= "</{$name}>{$separator}";
       }
       else {
         // make sure we escape value
         $value = self::escapeXML($value);
-        $xml .= "<{$name}>$value</{$name}>{$seperator}";
+        $xml .= "<{$name}>$value</{$name}>{$separator}";
       }
     }
     return $xml;
@@ -218,14 +253,14 @@ class CRM_Utils_Array {
    *   Destination array.
    * @param string $prefix
    *   (optional) String to prepend to keys.
-   * @param string $seperator
+   * @param string $separator
    *   (optional) String that separates the concatenated keys.
    */
-  public static function flatten(&$list, &$flat, $prefix = '', $seperator = ".") {
+  public static function flatten(&$list, &$flat, $prefix = '', $separator = ".") {
     foreach ($list as $name => $value) {
-      $newPrefix = ($prefix) ? $prefix . $seperator . $name : $name;
+      $newPrefix = ($prefix) ? $prefix . $separator . $name : $name;
       if (is_array($value)) {
-        self::flatten($value, $flat, $newPrefix, $seperator);
+        self::flatten($value, $flat, $newPrefix, $separator);
       }
       else {
         $flat[$newPrefix] = $value;

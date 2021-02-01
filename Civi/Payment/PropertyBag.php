@@ -2,7 +2,6 @@
 namespace Civi\Payment;
 
 use InvalidArgumentException;
-use Civi;
 use CRM_Core_Error;
 use CRM_Core_PseudoConstant;
 
@@ -216,19 +215,6 @@ class PropertyBag implements \ArrayAccess {
   }
 
   /**
-   * Save any legacy warnings to log.
-   *
-   * Called as a shutdown function.
-   */
-  public static function writeLegacyWarnings() {
-    if (!empty(static::$legacyWarnings)) {
-      $message = "Civi\\Payment\\PropertyBag related deprecation warnings:\n"
-        . implode("\n", array_keys(static::$legacyWarnings));
-      Civi::log()->warning($message, ['civi.tag' => 'deprecated']);
-    }
-  }
-
-  /**
    * @param string $prop
    * @param bool $silent if TRUE return NULL instead of throwing an exception. This is because offsetExists should be safe and not throw exceptions.
    * @return string canonical name.
@@ -417,14 +403,26 @@ class PropertyBag implements \ArrayAccess {
   }
 
   /**
-   * Get the monetary amount.
+   * Set the monetary amount.
+   *
+   * - We expect to be called with a string amount with optional decimals using
+   *   a '.' as the decimal point (not a ',').
+   *
+   * - We're ok with floats/ints being passed in, too, but we'll cast them to a
+   *   string.
+   *
+   * - Negatives are fine.
+   *
+   * @see https://github.com/civicrm/civicrm-core/pull/18219
+   *
+   * @param string|float|int $value
+   * @param string $label
    */
   public function setAmount($value, $label = 'default') {
     if (!is_numeric($value)) {
       throw new \InvalidArgumentException("setAmount requires a numeric amount value");
     }
-
-    return $this->set('amount', $label, \CRM_Utils_Money::format($value, NULL, NULL, TRUE));
+    return $this->set('amount', $label, filter_var($value, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION));
   }
 
   /**

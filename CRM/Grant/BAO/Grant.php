@@ -25,8 +25,13 @@ class CRM_Grant_BAO_Grant extends CRM_Grant_DAO_Grant {
    */
   public static function getGrantSummary($admin = FALSE) {
     $query = "
-            SELECT status_id, count(id) as status_total
-            FROM civicrm_grant  GROUP BY status_id";
+      SELECT status_id, count(g.id) as status_total
+      FROM civicrm_grant g
+      JOIN civicrm_contact c
+        ON g.contact_id = c.id
+      WHERE c.is_deleted = 0
+      GROUP BY status_id
+    ";
 
     $dao = CRM_Core_DAO::executeQuery($query);
 
@@ -247,7 +252,7 @@ class CRM_Grant_BAO_Grant extends CRM_Grant_DAO_Grant {
    * @return bool|mixed
    */
   public static function del($id) {
-    CRM_Utils_Hook::pre('delete', 'Grant', $id, CRM_Core_DAO::$_nullArray);
+    CRM_Utils_Hook::pre('delete', 'Grant', $id);
 
     $grant = new CRM_Grant_DAO_Grant();
     $grant->id = $id;

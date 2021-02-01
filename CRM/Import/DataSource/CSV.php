@@ -58,7 +58,7 @@ class CRM_Import_DataSource_CSV extends CRM_Import_DataSource {
     }
     $uploadSize = round(($uploadFileSize / (1024 * 1024)), 2);
     $form->assign('uploadSize', $uploadSize);
-    $form->add('File', 'uploadFile', ts('Import Data File'), 'size=30 maxlength=255', TRUE);
+    $form->add('File', 'uploadFile', ts('Import Data File'), NULL, TRUE);
     $form->setMaxFileSize($uploadFileSize);
     $form->addRule('uploadFile', ts('File size should be less than %1 MBytes (%2 bytes)', [
       1 => $uploadSize,
@@ -129,10 +129,9 @@ class CRM_Import_DataSource_CSV extends CRM_Import_DataSource {
       throw new CRM_Core_Exception("$file is empty. Please upload a valid file.");
     }
 
-    $config = CRM_Core_Config::singleton();
     // support tab separated
-    if (strtolower($fieldSeparator) == 'tab' ||
-      strtolower($fieldSeparator) == '\t'
+    if (strtolower($fieldSeparator) === 'tab' ||
+      strtolower($fieldSeparator) === '\t'
     ) {
       $fieldSeparator = "\t";
     }
@@ -188,13 +187,11 @@ class CRM_Import_DataSource_CSV extends CRM_Import_DataSource {
     }
 
     if ($tableName) {
-      // Drop previous table if passed in and create new one.
-      $db->query("DROP TABLE IF EXISTS $tableName");
+      CRM_Core_DAO::executeQuery("DROP TABLE IF EXISTS $tableName");
     }
     $table = CRM_Utils_SQL_TempTable::build()->setDurable();
     $tableName = $table->getName();
-    // Do we still need this?
-    $db->query("DROP TABLE IF EXISTS $tableName");
+    CRM_Core_DAO::executeQuery("DROP TABLE IF EXISTS $tableName");
     $table->createWithColumns(implode(' text, ', $columns) . ' text');
 
     $numColumns = count($columns);
@@ -225,17 +222,13 @@ class CRM_Import_DataSource_CSV extends CRM_Import_DataSource {
       $first = FALSE;
 
       // CRM-17859 Trim non-breaking spaces from columns.
-      $row = array_map(
-        function($string) {
-          return trim($string, chr(0xC2) . chr(0xA0));
-        }, $row);
+      $row = array_map(['CRM_Import_DataSource_CSV', 'trimNonBreakingSpaces'], $row);
       $row = array_map(['CRM_Core_DAO', 'escapeString'], $row);
       $sql .= "('" . implode("', '", $row) . "')";
       $count++;
 
       if ($count >= self::NUM_ROWS_TO_INSERT && !empty($sql)) {
-        $sql = "INSERT IGNORE INTO $tableName VALUES $sql";
-        $db->query($sql);
+        CRM_Core_DAO::executeQuery("INSERT IGNORE INTO $tableName VALUES $sql");
 
         $sql = NULL;
         $first = TRUE;
@@ -244,8 +237,7 @@ class CRM_Import_DataSource_CSV extends CRM_Import_DataSource {
     }
 
     if (!empty($sql)) {
-      $sql = "INSERT IGNORE INTO $tableName VALUES $sql";
-      $db->query($sql);
+      CRM_Core_DAO::executeQuery("INSERT IGNORE INTO $tableName VALUES $sql");
     }
 
     fclose($fd);
@@ -254,6 +246,30 @@ class CRM_Import_DataSource_CSV extends CRM_Import_DataSource {
     $result['import_table_name'] = $tableName;
 
     return $result;
+  }
+
+  /**
+   * Trim non-breaking spaces in a multibyte-safe way.
+   * See also dev/core#2127 - avoid breaking strings ending in à or any other
+   * unicode character sharing the same 0xA0 byte as a non-breaking space.
+   *
+   * @param string $string
+   * @return string The trimmed string
+   */
+  public static function trimNonBreakingSpaces(string $string): string {
+    $encoding = mb_detect_encoding($string, NULL, TRUE);
+    if ($encoding === FALSE) {
+      // This could mean a couple things. One is that the string is
+      // ASCII-encoded but contains a non-breaking space, which causes
+      // php to fail to detect the encoding. So let's just do what we
+      // did before which works in that situation and is at least no
+      // worse in other situations.
+      return trim($string, chr(0xC2) . chr(0xA0));
+    }
+    elseif ($encoding !== 'UTF-8') {
+      $string = mb_convert_encoding($string, 'UTF-8', [$encoding]);
+    }
+    return preg_replace("/^(\u{a0})+|(\u{a0})+$/", '', $string);
   }
 
 }

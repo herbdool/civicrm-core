@@ -9,6 +9,7 @@ require_once 'search.civix.php';
  */
 function search_civicrm_config(&$config) {
   _search_civix_civicrm_config($config);
+  Civi::dispatcher()->addListener('hook_civicrm_alterAngular', ['\Civi\Search\AfformSearchMetadataInjector', 'preprocess'], 1000);
 }
 
 /**
@@ -121,8 +122,23 @@ function search_civicrm_entityTypes(&$entityTypes) {
 }
 
 /**
- * Implements hook_civicrm_thems().
+ * Implements hook_civicrm_themes().
  */
 function search_civicrm_themes(&$themes) {
   _search_civix_civicrm_themes($themes);
+}
+
+/**
+ * Implements hook_civicrm_pre().
+ */
+function search_civicrm_pre($op, $entity, $id, &$params) {
+  // Supply default name/label when creating new SearchDisplay
+  if ($entity === 'SearchDisplay' && $op === 'create') {
+    if (empty($params['label'])) {
+      $params['label'] = $params['name'];
+    }
+    elseif (empty($params['name'])) {
+      $params['name'] = \CRM_Utils_String::munge($params['label']);
+    }
+  }
 }

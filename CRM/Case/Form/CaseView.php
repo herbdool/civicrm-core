@@ -275,7 +275,10 @@ class CRM_Case_Form_CaseView extends CRM_Core_Form {
     // This button is hidden but gets clicked by javascript at
     // https://github.com/civicrm/civicrm-core/blob/bd28ecf8121a85bc069cad3ab912a0c3dff8fdc5/templates/CRM/Case/Form/CaseView.js#L194
     // by the onChange handler for the above timeline_id select.
-    $this->addElement('submit', $this->getButtonName('next'), ' ', ['class' => 'hiddenElement']);
+    $this->addElement('xbutton', $this->getButtonName('next'), ' ', [
+      'class' => 'hiddenElement',
+      'type' => 'submit',
+    ]);
 
     $this->buildMergeCaseForm();
 
@@ -422,7 +425,7 @@ class CRM_Case_Form_CaseView extends CRM_Core_Form {
     $session = CRM_Core_Session::singleton();
     $session->pushUserContext($url);
 
-    if (!empty($params['timeline_id']) && !empty($_POST['_qf_CaseView_next'])) {
+    if (!empty($params['timeline_id']) && $buttonName == '_qf_CaseView_next') {
       civicrm_api3('Case', 'addtimeline', [
         'case_id' => $this->_caseID,
         'timeline' => $params['timeline_id'],
@@ -523,11 +526,12 @@ class CRM_Case_Form_CaseView extends CRM_Core_Form {
       // This button is hidden but gets clicked by javascript at
       // https://github.com/civicrm/civicrm-core/blob/bd28ecf8121a85bc069cad3ab912a0c3dff8fdc5/templates/CRM/Case/Form/CaseView.js#L55
       // when the mergeCasesDialog is saved.
-      $this->addElement('submit',
+      $this->addElement('xbutton',
         $this->getButtonName('next', 'merge_case'),
         ts('Merge'),
         [
           'class' => 'hiddenElement',
+          'type' => 'submit',
         ]
       );
     }

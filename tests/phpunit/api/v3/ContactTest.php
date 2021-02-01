@@ -650,8 +650,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
       'contact_id' => $contactId,
       'return' => 'contact_id.api_key',
     ]);
-    $field = $this->_apiversion == 4 ? 'contact.api_key' : 'contact_id.api_key';
-    $this->assertEquals('abcd1234', $joinResult[$field]);
+    $this->assertEquals('abcd1234', $joinResult['contact_id.api_key']);
 
     // Restricted return -- because we don't have permission
     $config->userPermissionClass->permissions = ['access CiviCRM', 'view all contacts', 'edit all contacts'];
@@ -3306,7 +3305,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
    * Test that getquick returns contacts with an exact first name match first.
    */
   public function testGetQuickID() {
-    $max = CRM_Core_DAO::singleValueQuery("SELECT max(id) FROM civicrm_contact");
+    $max = CRM_Core_DAO::singleValueQuery('SELECT max(id) FROM civicrm_contact');
     $this->getQuickSearchSampleData();
     $result = $this->callAPISuccess('contact', 'getquick', [
       'name' => $max + 2,
@@ -3479,6 +3478,28 @@ class api_v3_ContactTest extends CiviUnitTestCase {
     $this->callAPISuccess('Setting', 'create', ['includeOrderByClause' => FALSE]);
     $result = $this->callAPISuccess('contact', 'getquick', ['name' => 'bob']);
     $this->assertEquals('Bob, Bob :: bob@bob.com', $result['values'][0]['data']);
+  }
+
+  /**
+   * Test deleted contacts are excluded from getquick results.
+   *
+   * @throws \CiviCRM_API3_Exception
+   */
+  public function testGetQuickNotDeleted() {
+    $this->getQuickSearchSampleData();
+    $result = $this->callAPISuccess('contact', 'getquick', [
+      'name' => 'abc',
+      'field_name' => 'external_identifier',
+      'table_name' => 'cc',
+    ])['values'];
+    $this->assertCount(1, $result);
+    $this->callAPISuccess('Contact', 'delete', ['id' => $result['0']['id']]);
+    $result = $this->callAPISuccess('contact', 'getquick', [
+      'name' => 'abc',
+      'field_name' => 'external_identifier',
+      'table_name' => 'cc',
+    ])['values'];
+    $this->assertCount(0, $result);
   }
 
   /**
@@ -3946,23 +3967,17 @@ class api_v3_ContactTest extends CiviUnitTestCase {
    */
   public function testMerge() {
     $this->createLoggedInUser();
-    $otherContact = $this->callAPISuccess('contact', 'create', $this->_params);
-    $retainedContact = $this->callAPISuccess('contact', 'create', $this->_params);
-    $this->callAPISuccess('contact', 'merge', [
-      'to_keep_id' => $retainedContact['id'],
-      'to_remove_id' => $otherContact['id'],
-      'auto_flip' => FALSE,
-    ]);
+    $this->ids['contact'][0] = $this->callAPISuccess('Contact', 'create', $this->_params)['id'];
+    $this->ids['contact'][1] = $this->callAPISuccess('Contact', 'create', $this->_params)['id'];
+    $retainedContact = $this->doMerge();
 
-    $contacts = $this->callAPISuccess('contact', 'get', $this->_params);
-    $this->assertEquals($retainedContact['id'], $contacts['id']);
     $activity = $this->callAPISuccess('Activity', 'getsingle', [
       'target_contact_id' => $retainedContact['id'],
       'activity_type_id' => 'Contact Merged',
     ]);
     $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($activity['activity_date_time'])));
     $activity2 = $this->callAPISuccess('Activity', 'getsingle', [
-      'target_contact_id' => $otherContact['id'],
+      'target_contact_id' => $this->ids['contact'][1],
       'activity_type_id' => 'Contact Deleted by Merge',
     ]);
     $this->assertEquals($activity['id'], $activity2['parent_id']);
@@ -4151,6 +4166,30 @@ class api_v3_ContactTest extends CiviUnitTestCase {
   }
 
   /**
+   * Test retrieving merged contacts.
+   *
+   * The goal here is to start with a contact deleted by merged and find out the contact that is the current version of them.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testMergedGetWithPermanentlyDeletedContact() {
+    $this->contactIDs[] = $this->individualCreate();
+    $this->contactIDs[] = $this->individualCreate();
+    $this->contactIDs[] = $this->individualCreate();
+    $this->contactIDs[] = $this->individualCreate();
+
+    // First do an 'unnatural merge' - they 'like to merge into the lowest but this will mean that contact 0 merged to contact [3].
+    // When the batch merge runs.... the new lowest contact is contact[1]. All contacts will merge into that contact,
+    // including contact[3], resulting in only 3 existing at the end. For each contact the correct answer to 'who did I eventually
+    // wind up being should be [1]
+    $this->callAPISuccess('Contact', 'merge', ['to_remove_id' => $this->contactIDs[0], 'to_keep_id' => $this->contactIDs[3]]);
+    $this->callAPISuccess('Contact', 'delete', ['id' => $this->contactIDs[3], 'skip_undelete' => TRUE]);
+    $this->callAPIFailure('Contact', 'getmergedto', ['sequential' => 1, 'contact_id' => $this->contactIDs[0]]);
+    $title = CRM_Contact_Page_View::setTitle($this->contactIDs[0], TRUE);
+    $this->assertContains('civicrm/profile/view&amp;reset=1&amp;gid=7&amp;id=3&amp;snippet=4', $title);
+  }
+
+  /**
    * Test merging 2 contacts with delete to trash off.
    *
    * We are checking that there is no error due to attempting to add an activity for the
@@ -4264,6 +4303,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
         'group_id' => $create_group['id'],
       ];
       $this->callApiSuccess('GroupContact', 'create', $group_contact_params);
+      unset(Civi::$statics['CRM_Core_Permission_Base']);
       $contact_get = $this->callAPISuccess('contact', 'get', ['group' => $title, 'return' => 'group']);
       $this->assertEquals(1, $contact_get['count']);
       $this->assertEquals($created_contact_id, $contact_get['id']);
@@ -4307,6 +4347,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
         'created_id' => $created_contact_id,
       ];
       $create_group = $this->callAPISuccess('Group', 'create', $group_params);
+      unset(Civi::$statics['CRM_Core_Permission_Base']);
       $createdGroupsIds[] = $create_group['id'];
       $createdGroupTitles[] = $title;
       // Add contact to the new group.
@@ -4374,6 +4415,7 @@ class api_v3_ContactTest extends CiviUnitTestCase {
       ];
       $this->callApiSuccess('GroupContact', 'create', $group_contact_params);
     }
+    unset(Civi::$statics['CRM_Core_Permission_Base']);
     $contact_get = $this->callAPISuccess('contact', 'get', ['group' => [$createdGroupTitles[0] => 1], 'return' => 'group']);
     $this->assertEquals(1, $contact_get['count']);
     $this->assertEquals($created_contact_id, $contact_get['id']);
@@ -4894,6 +4936,36 @@ class api_v3_ContactTest extends CiviUnitTestCase {
       'auto_flip' => FALSE,
     ]);
     return $this->callAPISuccessGetSingle('Contact', ['id' => $isReverse ? $this->ids['contact'][1] : $this->ids['contact'][0]]);
+  }
+
+  /**
+   * Test a lack of fatal errors when the where contains an emoji.
+   *
+   * By default our DBs are not 🦉 compliant. This test will age
+   * out when we are.
+   *
+   * @throws \API_Exception
+   */
+  public function testEmojiInWhereClause(): void {
+    $schemaNeedsAlter = \CRM_Core_BAO_SchemaHandler::databaseSupportsUTF8MB4();
+    if ($schemaNeedsAlter) {
+      \CRM_Core_DAO::executeQuery("
+        ALTER TABLE civicrm_contact MODIFY COLUMN
+        `first_name` VARCHAR(64) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'First Name.',
+        CHARSET utf8
+      ");
+    }
+    $this->callAPISuccess('Contact', 'get', [
+      'debug' => 1,
+      'first_name' => '🦉Claire',
+    ]);
+    if ($schemaNeedsAlter) {
+      \CRM_Core_DAO::executeQuery("
+        ALTER TABLE civicrm_contact MODIFY COLUMN
+        `first_name` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'First Name.',
+        CHARSET utf8mb4
+      ");
+    }
   }
 
 }

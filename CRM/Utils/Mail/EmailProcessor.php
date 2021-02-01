@@ -134,10 +134,10 @@ class CRM_Utils_Mail_EmailProcessor {
     }
 
     $config = CRM_Core_Config::singleton();
-    $verpSeperator = preg_quote($config->verpSeparator);
-    $twoDigitStringMin = $verpSeperator . '(\d+)' . $verpSeperator . '(\d+)';
-    $twoDigitString = $twoDigitStringMin . $verpSeperator;
-    $threeDigitString = $twoDigitString . '(\d+)' . $verpSeperator;
+    $verpSeparator = preg_quote($config->verpSeparator);
+    $twoDigitStringMin = $verpSeparator . '(\d+)' . $verpSeparator . '(\d+)';
+    $twoDigitString = $twoDigitStringMin . $verpSeparator;
+    $threeDigitString = $twoDigitString . '(\d+)' . $verpSeparator;
 
     // FIXME: legacy regexen to handle CiviCRM 2.1 address patterns, with domain id and possible VERP part
     $commonRegex = '/^' . preg_quote($dao->localpart) . '(b|bounce|c|confirm|o|optOut|r|reply|re|e|resubscribe|u|unsubscribe)' . $threeDigitString . '([0-9a-f]{16})(-.*)?@' . preg_quote($dao->domain) . '$/';
@@ -157,7 +157,7 @@ class CRM_Utils_Mail_EmailProcessor {
     try {
       $store = CRM_Mailing_MailStore::getStore($dao->name);
     }
-    catch (Exception$e) {
+    catch (Exception $e) {
       $message = ts('Could not connect to MailStore for ') . $dao->username . '@' . $dao->server . '<p>';
       $message .= ts('Error message: ');
       $message .= '<pre>' . $e->getMessage() . '</pre><p>';
@@ -224,9 +224,19 @@ class CRM_Utils_Mail_EmailProcessor {
 
         // preseve backward compatibility
         if ($usedfor == 0 || $is_create_activities) {
+          // Mail account may have 'Skip emails which do not have a Case ID
+          // or Case hash' option, if its enabled and email is not related
+          // to cases - then we need to put email to ignored folder.
+          $caseMailUtils = new CRM_Utils_Mail_CaseMail();
+          if (!empty($dao->is_non_case_email_skipped) && !$caseMailUtils->isCaseEmail($mail->subject)) {
+            $store->markIgnored($key);
+            continue;
+          }
+
           // if its the activities that needs to be processed ..
           try {
-            $mailParams = CRM_Utils_Mail_Incoming::parseMailingObject($mail);
+            $createContact = !($dao->is_contact_creation_disabled_if_no_match ?? FALSE);
+            $mailParams = CRM_Utils_Mail_Incoming::parseMailingObject($mail, $createContact, FALSE);
           }
           catch (Exception $e) {
             echo $e->getMessage();
@@ -234,13 +244,13 @@ class CRM_Utils_Mail_EmailProcessor {
             continue;
           }
 
-          require_once 'CRM/Utils/DeprecatedUtils.php';
-          $params = _civicrm_api3_deprecated_activity_buildmailparams($mailParams, $emailActivityTypeId);
+          $params = self::deprecated_activity_buildmailparams($mailParams, $emailActivityTypeId);
 
           $params['version'] = 3;
           if (!empty($dao->activity_status)) {
             $params['status_id'] = $dao->activity_status;
           }
+
           $result = civicrm_api('activity', 'create', $params);
 
           if ($result['is_error']) {
@@ -522,6 +532,52 @@ class CRM_Utils_Mail_EmailProcessor {
       }
     }
     return $text;
+  }
+
+  /**
+   * @param array $result
+   * @param int $activityTypeID
+   *
+   * @return array
+   *   <type> $params
+   */
+  protected static function deprecated_activity_buildmailparams($result, $activityTypeID) {
+    // get ready for collecting data about activity to be created
+    $params = [];
+
+    $params['activity_type_id'] = $activityTypeID;
+
+    $params['status_id'] = 'Completed';
+    if (!empty($result['from']['id'])) {
+      $params['source_contact_id'] = $params['assignee_contact_id'] = $result['from']['id'];
+    }
+    $params['target_contact_id'] = [];
+    $keys = ['to', 'cc', 'bcc'];
+    foreach ($keys as $key) {
+      if (is_array($result[$key])) {
+        foreach ($result[$key] as $key => $keyValue) {
+          if (!empty($keyValue['id'])) {
+            $params['target_contact_id'][] = $keyValue['id'];
+          }
+        }
+      }
+    }
+    $params['subject'] = $result['subject'];
+    $params['activity_date_time'] = $result['date'];
+    $params['details'] = $result['body'];
+
+    $numAttachments = Civi::settings()->get('max_attachments_backend') ?? CRM_Core_BAO_File::DEFAULT_MAX_ATTACHMENTS_BACKEND;
+    for ($i = 1; $i <= $numAttachments; $i++) {
+      if (isset($result["attachFile_$i"])) {
+        $params["attachFile_$i"] = $result["attachFile_$i"];
+      }
+      else {
+        // No point looping 100 times if there's only one attachment
+        break;
+      }
+    }
+
+    return $params;
   }
 
 }

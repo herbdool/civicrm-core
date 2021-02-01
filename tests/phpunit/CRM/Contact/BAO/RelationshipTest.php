@@ -58,18 +58,22 @@ class CRM_Contact_BAO_RelationshipTest extends CiviUnitTestCase {
       'contact_type_b' => 'Organization',
     ]);
 
-    $result = CRM_Contact_BAO_Relationship::buildRelationshipTypeOptions(
-      ['contact_type' => 'Organization']
-    );
-    $this->assertContains($orgToOrgType, $result);
-    $this->assertContains($orgToOrgReverseType, $result);
+    $result = civicrm_api3('Relationship', 'getoptions', [
+      'field' => 'relationship_type_id',
+      'is_form' => TRUE,
+      'contact_type' => 'Organization',
+    ]);
+    $this->assertContains($orgToOrgType, $result['values']);
+    $this->assertContains($orgToOrgReverseType, $result['values']);
 
-    $result = CRM_Contact_BAO_Relationship::buildRelationshipTypeOptions(
-      ['contact_type' => 'Individual']
-    );
+    $result = civicrm_api3('Relationship', 'getoptions', [
+      'field' => 'relationship_type_id',
+      'is_form' => TRUE,
+      'contact_type' => 'Individual',
+    ]);
 
-    $this->assertNotContains($orgToOrgType, $result);
-    $this->assertNotContains($orgToOrgReverseType, $result);
+    $this->assertNotContains($orgToOrgType, $result['values']);
+    $this->assertNotContains($orgToOrgReverseType, $result['values']);
   }
 
   public function testContactIdAndRelationshipIdWillBeUsedInFilter() {
@@ -109,30 +113,34 @@ class CRM_Contact_BAO_RelationshipTest extends CiviUnitTestCase {
       'relationship_type_id' => $orgToPersonTypeId,
     ]);
 
-    $options = CRM_Contact_BAO_Relationship::buildRelationshipTypeOptions([
+    $options = civicrm_api3('Relationship', 'getoptions', [
+      'field' => 'relationship_type_id',
+      'is_form' => TRUE,
       'relationship_id' => (string) $relationship['id'],
       'contact_id' => $individual['id'],
     ]);
 
     // for this relationship only individual=>organization is possible
-    $this->assertContains($personToOrgType, $options);
-    $this->assertNotContains($orgToPersonType, $options);
+    $this->assertContains($personToOrgType, $options['values']);
+    $this->assertNotContains($orgToPersonType, $options['values']);
 
     // by passing relationship ID we know that the "B" side is an organization
-    $this->assertNotContains($personToPersonType, $options);
-    $this->assertNotContains($personToPersonReverseType, $options);
+    $this->assertNotContains($personToPersonType, $options['values']);
+    $this->assertNotContains($personToPersonReverseType, $options['values']);
 
-    $options = CRM_Contact_BAO_Relationship::buildRelationshipTypeOptions([
+    $options = civicrm_api3('Relationship', 'getoptions', [
+      'field' => 'relationship_type_id',
+      'is_form' => TRUE,
       'contact_id' => $individual['id'],
     ]);
 
     // for this result we only know that "A" must be an individual
-    $this->assertContains($personToOrgType, $options);
-    $this->assertNotContains($orgToPersonType, $options);
+    $this->assertContains($personToOrgType, $options['values']);
+    $this->assertNotContains($orgToPersonType, $options['values']);
 
     // unlike when we pass relationship type ID there is no filter by "B" type
-    $this->assertContains($personToPersonType, $options);
-    $this->assertContains($personToPersonReverseType, $options);
+    $this->assertContains($personToPersonType, $options['values']);
+    $this->assertContains($personToPersonReverseType, $options['values']);
   }
 
   /**
@@ -224,11 +232,13 @@ class CRM_Contact_BAO_RelationshipTest extends CiviUnitTestCase {
     $this->assertEquals([$orgToPersonTypeId1, $orgToPersonTypeId2], $membershipType['relationship_type_id']);
     $this->assertEquals(['b_a', 'b_a'], $membershipType['relationship_direction']);
 
+    $startDate = date('Y-m') . '-19';
+    $joinDate = date('Y-m', strtotime('1 month ago')) . '-19';
     $this->callAPISuccess('Membership', 'create', [
       'membership_type_id' => $membershipType['id'],
       'contact_id' => $organisationID,
-      'start_date' => '2019-08-19',
-      'join_date' => '2019-07-19',
+      'start_date' => $startDate,
+      'join_date' => $joinDate,
     ]);
 
     $relationshipOne = $this->callAPISuccess('Relationship', 'create', [
@@ -245,8 +255,8 @@ class CRM_Contact_BAO_RelationshipTest extends CiviUnitTestCase {
     $this->callAPISuccessGetCount('Membership', ['contact_id' => $individualID], 1);
 
     $inheritedMembership = $this->callAPISuccessGetSingle('Membership', ['contact_id' => $individualID]);
-    $this->assertEquals('2019-08-19', $inheritedMembership['start_date']);
-    $this->assertEquals('2019-07-19', $inheritedMembership['join_date']);
+    $this->assertEquals($startDate, $inheritedMembership['start_date']);
+    $this->assertEquals($joinDate, $inheritedMembership['join_date']);
 
     $this->callAPISuccessGetCount('Membership', ['contact_id' => $organisationID], 1);
     // Disable the relationship & check the membership is not removed because the other relationship is still valid.

@@ -227,8 +227,6 @@ class CRM_Contact_Selector extends CRM_Core_Selector_Base implements CRM_Core_Se
       $displayRelationshipType,
       $operator
     );
-
-    $this->_options = &$this->_query->_options;
   }
 
   /**
@@ -1046,7 +1044,7 @@ class CRM_Contact_Selector extends CRM_Core_Selector_Base implements CRM_Core_Se
     try {
       Civi::service('prevnext')->fillWithSql($cacheKey, $sql);
     }
-    catch (CRM_Core_Exception $e) {
+    catch (\Exception $e) {
       if ($coreSearch) {
         // in the case of error, try rebuilding cache using full sql which is used for search selector display
         // this fixes the bugs reported in CRM-13996 & CRM-14438

@@ -233,8 +233,7 @@ class CRM_Dedupe_Merger {
 
     CRM_Utils_Hook::merge('cidRefs', $contactReferences);
     if ($contactReferences !== $coreReferences) {
-      Civi::log()
-        ->warning("Deprecated hook ::merge in context of 'cidRefs. Use entityTypes instead.", ['civi.tag' => 'deprecated']);
+      CRM_Core_Error::deprecatedWarning("Deprecated hook ::merge in context of 'cidRefs. Use entityTypes instead.");
     }
     \Civi::$statics[__CLASS__]['contact_references'] = $contactReferences;
     return \Civi::$statics[__CLASS__]['contact_references'];
@@ -538,6 +537,19 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
       if ($table === 'civicrm_activity_contact') {
         $sqls[] = "UPDATE IGNORE civicrm_activity_contact SET contact_id = $mainId WHERE contact_id = $otherId";
         $sqls[] = "DELETE FROM civicrm_activity_contact WHERE contact_id = $otherId";
+        continue;
+      }
+
+      if ($table === 'civicrm_dashboard_contact') {
+        $sqls[] = "UPDATE IGNORE civicrm_dashboard_contact SET contact_id = $mainId WHERE contact_id = $otherId";
+        $sqls[] = "DELETE FROM civicrm_dashboard_contact WHERE contact_id = $otherId";
+        continue;
+      }
+
+      if ($table === 'civicrm_dedupe_exception') {
+        $sqls[] = "UPDATE IGNORE civicrm_dedupe_exception SET contact_id1 = $mainId WHERE contact_id1 = $otherId";
+        $sqls[] = "UPDATE IGNORE civicrm_dedupe_exception SET contact_id2 = $mainId WHERE contact_id2 = $otherId";
+        $sqls[] = "DELETE FROM civicrm_dedupe_exception WHERE contact_id1 = $otherId OR contact_id2 = $otherId";
         continue;
       }
 
@@ -1238,7 +1250,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
       $relTables[$name]['other_url'] = str_replace('$cid', $otherId, $relTables[$name]['url']);
       if ($name === 'rel_table_users') {
         // @todo - this user url stuff is only needed for the form layer - move to CRM_Contact_Form_Merge
-        $relTables[$name]['main_url'] = str_replace('%ufid', CRM_Core_BAO_UFMatch::getUFId($otherId), $relTables[$name]['url']);
+        $relTables[$name]['main_url'] = str_replace('%ufid', CRM_Core_BAO_UFMatch::getUFId($mainId), $relTables[$name]['url']);
         $relTables[$name]['other_url'] = str_replace('%ufid', CRM_Core_BAO_UFMatch::getUFId($otherId), $relTables[$name]['url']);
       }
       if ($name === 'rel_table_memberships') {
@@ -1388,7 +1400,9 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
         $removeTables = array_merge($moveTables, $relTables[substr($key, 5)]['tables']);
       }
     }
-    self::mergeLocations($mainId, $otherId, $migrationInfo);
+    $mergeHandler = new CRM_Dedupe_MergeHandler((int) $mainId, (int) $otherId);
+    $mergeHandler->setMigrationInfo($migrationInfo);
+    self::mergeLocations($mergeHandler);
 
     // **** Do contact related migrations
     // @todo - move all custom field processing to the move class & eventually have an
@@ -1396,7 +1410,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
     $customFieldBAO = new CRM_Core_BAO_CustomField();
     $customFieldBAO->move($otherId, $mainId, $submittedCustomFields);
     // add the related tables and unset the ones that don't sport any of the duplicate contact's info
-    $mergeHandler = new CRM_Dedupe_MergeHandler((int) $mainId, (int) $otherId);
+
     CRM_Dedupe_Merger::moveContactBelongings($mergeHandler, $moveTables, $tableOperations);
     unset($moveTables, $tableOperations);
 
@@ -1775,49 +1789,22 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
    * The use of the new hook is tested, including the fact it is called before contributions are merged, as this
    * is likely to be significant data in merge hooks.
    *
-   * @param int $mainId
-   * @param int $otherId
-   *
-   * @param array $migrationInfo
-   *   Migration info for the merge. This is passed to the hook as informational only.
+   * @param \CRM_Dedupe_MergeHandler $mergeHandler
    */
-  public static function mergeLocations($mainId, $otherId, $migrationInfo) {
-    foreach ($migrationInfo as $key => $value) {
-      $isLocationField = (substr($key, 0, 14) === 'move_location_' and $value != NULL);
-      if (!$isLocationField) {
-        continue;
-      }
-      $locField = explode('_', $key);
-      $fieldName = $locField[2];
-      $fieldCount = $locField[3];
-
-      // Set up the operation type (add/overwrite)
-      // Ignore operation for websites
-      // @todo Tidy this up
-      $operation = 0;
-      if ($fieldName !== 'website') {
-        $operation = $migrationInfo['location_blocks'][$fieldName][$fieldCount]['operation'] ?? NULL;
-      }
-      // default operation is overwrite.
-      if (!$operation) {
-        $operation = 2;
-      }
-      $locBlocks[$fieldName][$fieldCount]['operation'] = $operation;
-    }
+  public static function mergeLocations($mergeHandler) {
+    $locBlocks = $mergeHandler->getLocationBlocksToMerge();
     $blocksDAO = [];
+    $migrationInfo = $mergeHandler->getMigrationInfo();
 
     // @todo Handle OpenID (not currently in API).
     if (!empty($locBlocks)) {
       $locationBlocks = self::getLocationBlockInfo();
 
-      $primaryBlockIds = CRM_Contact_BAO_Contact::getLocBlockIds($mainId, ['is_primary' => 1]);
-      $billingBlockIds = CRM_Contact_BAO_Contact::getLocBlockIds($mainId, ['is_billing' => 1]);
+      $primaryBlockIds = CRM_Contact_BAO_Contact::getLocBlockIds($mergeHandler->getToKeepID(), ['is_primary' => 1]);
+      $billingBlockIds = CRM_Contact_BAO_Contact::getLocBlockIds($mergeHandler->getToKeepID(), ['is_billing' => 1]);
 
       foreach ($locBlocks as $name => $block) {
         $blocksDAO[$name] = ['delete' => [], 'update' => []];
-        if (!is_array($block) || CRM_Utils_System::isNull($block)) {
-          continue;
-        }
         $daoName = 'CRM_Core_DAO_' . $locationBlocks[$name]['label'];
         $changePrimary = FALSE;
         $primaryDAOId = (array_key_exists($name, $primaryBlockIds)) ? array_pop($primaryBlockIds[$name]) : NULL;
@@ -1829,23 +1816,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
           if (!$otherBlockId) {
             continue;
           }
-
-          // For the block which belongs to other-contact, link the location block to main-contact
-          $otherBlockDAO = new $daoName();
-          $otherBlockDAO->contact_id = $mainId;
-
-          // Get the ID of this block on the 'other' contact, otherwise skip
-          $otherBlockDAO->id = $otherBlockId;
-
-          // Add/update location and type information from the form, if applicable
-          if ($locationBlocks[$name]['hasLocation']) {
-            $locTypeId = $migrationInfo['location_blocks'][$name][$blkCount]['locTypeId'] ?? NULL;
-            $otherBlockDAO->location_type_id = $locTypeId;
-          }
-          if ($locationBlocks[$name]['hasType']) {
-            $typeTypeId = $migrationInfo['location_blocks'][$name][$blkCount]['typeTypeId'] ?? NULL;
-            $otherBlockDAO->{$locationBlocks[$name]['hasType']} = $typeTypeId;
-          }
+          $otherBlockDAO = $mergeHandler->copyDataToNewBlockDAO($otherBlockId, $name, $blkCount);
 
           // If we're deliberately setting this as primary then add the flag
           // and remove it from the current primary location (if there is one).
@@ -1854,7 +1825,7 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
           if (!$changePrimary && $set_primary == "1") {
             $otherBlockDAO->is_primary = 1;
             if ($primaryDAOId) {
-              $removePrimaryDAO = new $daoName();
+              $removePrimaryDAO = $mergeHandler->getDAOForLocationEntity($name);
               $removePrimaryDAO->id = $primaryDAOId;
               $removePrimaryDAO->is_primary = 0;
               $blocksDAO[$name]['update'][$primaryDAOId] = $removePrimaryDAO;
@@ -1871,10 +1842,9 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
             $otherBlockDAO->is_billing = 0;
           }
 
-          $operation = CRM_Utils_Array::value('operation', $values, 2);
           // overwrite - need to delete block which belongs to main-contact.
-          if (!empty($mainBlockId) && ($operation == 2)) {
-            $deleteDAO = new $daoName();
+          if (!empty($mainBlockId) && $values['is_replace']) {
+            $deleteDAO = $mergeHandler->getDAOForLocationEntity($name);
             $deleteDAO->id = $mainBlockId;
             $deleteDAO->find(TRUE);
 
@@ -1890,10 +1860,11 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
           }
           $blocksDAO[$name]['update'][$otherBlockDAO->id] = $otherBlockDAO;
         }
+        $blocksDAO[$name]['update'] += $mergeHandler->getBlocksToUpdateForDeletedContact($name);
       }
     }
 
-    CRM_Utils_Hook::alterLocationMergeData($blocksDAO, $mainId, $otherId, $migrationInfo);
+    CRM_Utils_Hook::alterLocationMergeData($blocksDAO, $mergeHandler->getToKeepID(), $mergeHandler->getToRemoveID(), $migrationInfo);
     foreach ($blocksDAO as $blockDAOs) {
       if (!empty($blockDAOs['update'])) {
         foreach ($blockDAOs['update'] as $blockDAO) {
@@ -1951,10 +1922,29 @@ INNER JOIN  civicrm_membership membership2 ON membership1.membership_type_id = m
       CRM_Core_BAO_PrevNextCache::markConflict($mainId, $otherId, $cacheKeyString, $conflicts, $mode);
     }
     else {
-      CRM_Core_BAO_PrevNextCache::deletePair($mainId, $otherId, $cacheKeyString);
+      self::deletePairFromPrevNextCache((int) $mainId, (int) $otherId);
     }
     self::releaseLocks($locks);
     return $resultStats;
+  }
+
+  /**
+   * Delete merged pair from the previous next cache table as the are no longer a merge candidate.
+   *
+   * It's possible there may be more than one set of merge results cached, with different cache keys.
+   * Once we have merged a pair these should all go (even from a different merge search) as they
+   * can only be merged once.
+   *
+   * @param int $contactID1
+   * @param int $contactID2
+   */
+  protected static function deletePairFromPrevNextCache(int $contactID1, int $contactID2) {
+    CRM_Core_DAO::executeQuery("
+      DELETE FROM civicrm_prevnext_cache
+      WHERE  entity_table = 'civicrm_contact'
+        AND (entity_id1 = %1 AND entity_id2 = %2) OR (entity_id1 = %2 AND entity_id2 = %1)",
+      [1 => [$contactID1, 'Integer'], 2 => [$contactID2, 'Integer']]
+    );
   }
 
   /**

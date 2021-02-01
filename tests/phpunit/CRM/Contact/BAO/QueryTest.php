@@ -405,7 +405,7 @@ class CRM_Contact_BAO_QueryTest extends CiviUnitTestCase {
       'contact_sub_type' => 1,
       'sort_name' => 1,
     ];
-    $expectedSQL = 'SELECT contact_a.id as contact_id, contact_a.contact_type as `contact_type`, contact_a.contact_sub_type as `contact_sub_type`, contact_a.sort_name as `sort_name`, civicrm_address.id as address_id, ' . $selectClause . "  FROM civicrm_contact contact_a LEFT JOIN civicrm_address ON ( contact_a.id = civicrm_address.contact_id AND civicrm_address.is_primary = 1 ) WHERE  (  ( " . $whereClause . " )  )  AND (contact_a.is_deleted = 0)    ORDER BY `contact_a`.`sort_name` ASC, `contact_a`.`id` ";
+    $expectedSQL = 'SELECT contact_a.id as contact_id, contact_a.contact_type as `contact_type`, contact_a.contact_sub_type as `contact_sub_type`, contact_a.sort_name as `sort_name`, civicrm_address.id as address_id, ' . $selectClause . "  FROM civicrm_contact contact_a LEFT JOIN civicrm_address ON ( contact_a.id = civicrm_address.contact_id AND civicrm_address.is_primary = 1 ) WHERE  (  ( " . $whereClause . " )  )  AND ( 1 ) AND (contact_a.is_deleted = 0)    ORDER BY `contact_a`.`sort_name` ASC, `contact_a`.`id` ";
     $queryObj = new CRM_Contact_BAO_Query($params, $returnProperties);
     try {
       $this->assertLike($expectedSQL, $queryObj->getSearchSQL());
@@ -575,9 +575,9 @@ class CRM_Contact_BAO_QueryTest extends CiviUnitTestCase {
         $searchParams = [[$key, '=', strtolower($value), 0, 1]];
       }
 
-      $result = CRM_Contact_BAO_Query::apiQuery($searchParams);
-      $this->assertCount(1, $result[0], 'search for ' . $key);
-      $contact = reset($result[0]);
+      [$result] = CRM_Contact_BAO_Query::apiQuery($searchParams);
+      $this->assertCount(1, $result, 'search for ' . $key);
+      $contact = reset($result);
       $this->assertEquals('Minnie Mouse', $contact['display_name']);
       $this->assertEquals('BOb', $contact['current_employer']);
     }

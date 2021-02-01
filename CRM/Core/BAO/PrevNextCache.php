@@ -122,32 +122,6 @@ WHERE  cachekey     = %3 AND
   }
 
   /**
-   * Delete pair from the previous next cache table to remove it from further merge consideration.
-   *
-   * The pair may have been flipped, so make sure we delete using both orders
-   *
-   * @param int $id1
-   * @param int $id2
-   * @param string $cacheKey
-   */
-  public static function deletePair($id1, $id2, $cacheKey = NULL) {
-    $sql = "DELETE FROM civicrm_prevnext_cache WHERE  entity_table = 'civicrm_contact'";
-
-    $pair = "(entity_id1 = %2 AND entity_id2 = %3) OR (entity_id1 = %3 AND entity_id2 = %2)";
-    $sql .= " AND ( {$pair} )";
-    $params[2] = [$id1, 'Integer'];
-    $params[3] = [$id2, 'Integer'];
-
-    if (isset($cacheKey)) {
-      $sql .= " AND cachekey LIKE %4";
-      // used % to address any row with conflict-cacheKey e.g "merge Individual_8_0_conflicts"
-      $params[4] = ["{$cacheKey}%", 'String'];
-    }
-
-    CRM_Core_DAO::executeQuery($sql, $params);
-  }
-
-  /**
    * Mark contacts as being in conflict.
    *
    * @param int $id1
@@ -351,7 +325,7 @@ FROM   civicrm_prevnext_cache pn
     CRM_Core_Error::deprecatedFunctionWarning('Deprecated function');
     // If entity table is an array we are passing in an older format where this function only had 1 param $values. We put a deprecation warning.
     if (!empty($entity_table) && is_array($entity_table)) {
-      Civi::log()->warning('Deprecated code path. Values should not be set this is going away in the future in favour of specific function params for each column.', array('civi.tag' => 'deprecated'));
+      CRM_Core_Error::deprecatedWarning('Deprecated code path. Values should not be set this is going away in the future in favour of specific function params for each column.');
       foreach ($values as $value) {
         $valueArray = self::convertSetItemValues($value);
         self::setItem($valueArray[0], $valueArray[1], $valueArray[2], $valueArray[3], $valueArray[4]);

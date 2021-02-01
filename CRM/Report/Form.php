@@ -1535,7 +1535,7 @@ class CRM_Report_Form extends CRM_Core_Form {
     if (!empty($this->_charts)) {
       $this->addElement('select', "charts", ts('Chart'), $this->_charts);
       $this->assign('charts', $this->_charts);
-      $this->addElement('submit', $this->_chartButtonName, ts('View'));
+      $this->addElement('xbutton', $this->_chartButtonName, ts('View'), ['type' => 'submit']);
     }
   }
 
@@ -1660,7 +1660,10 @@ class CRM_Report_Form extends CRM_Core_Form {
       $this->assign('group', TRUE);
     }
 
-    $this->addElement('submit', $this->_groupButtonName, '', ['style' => 'display: none;']);
+    $this->addElement('xbutton', $this->_groupButtonName, '', [
+      'type' => 'submit',
+      'style' => 'display: none;',
+    ]);
 
     $this->addChartOptions();
     $showResultsLabel = $this->getResultsLabel();
@@ -2100,9 +2103,25 @@ class CRM_Report_Form extends CRM_Core_Form {
         break;
 
       case 'nll':
+        if ($type == 'String') {
+          $sqlOP = $this->getSQLOperator($op);
+          $clause = "( {$field['dbAlias']} $sqlOP OR {$field['dbAlias']} = '' )";
+        }
+        else {
+          $sqlOP = $this->getSQLOperator($op);
+          $clause = "( {$field['dbAlias']} $sqlOP )";
+        }
+        break;
+
       case 'nnll':
-        $sqlOP = $this->getSQLOperator($op);
-        $clause = "( {$field['dbAlias']} $sqlOP )";
+        if ($type == 'String') {
+          $sqlOP = $this->getSQLOperator($op);
+          $clause = "( {$field['dbAlias']} $sqlOP AND {$field['dbAlias']} <> '' )";
+        }
+        else {
+          $sqlOP = $this->getSQLOperator($op);
+          $clause = "( {$field['dbAlias']} $sqlOP )";
+        }
         break;
 
       case 'eq':
@@ -3909,7 +3928,8 @@ WHERE cg.extends IN ('" . implode("','", $this->_customGroupExtends) . "') AND
     }
     $sql = "
 SELECT cg.table_name, cg.title, cg.extends, cf.id as cf_id, cf.label,
-       cf.column_name, cf.data_type, cf.html_type, cf.option_group_id, cf.time_format
+       cf.column_name, cf.data_type, cf.html_type, cf.option_group_id, cf.time_format,
+       cf.serialize as serialize
 FROM   civicrm_custom_group cg
 INNER  JOIN civicrm_custom_field cf ON cg.id = cf.custom_group_id
 WHERE cg.extends IN ('" . implode("','", $this->_customGroupExtends) . "') AND
@@ -4958,7 +4978,11 @@ LEFT JOIN civicrm_contact {$field['alias']} ON {$field['alias']}.id = {$this->_a
       $select = preg_replace('/SELECT(\s+SQL_CALC_FOUND_ROWS)?\s+/i', $select, $this->_select);
       $sql = "{$select} {$this->_from} {$this->_where} {$this->_groupBy} {$this->_having} {$this->_orderBy}";
       $sql = str_replace('WITH ROLLUP', '', $sql);
+      if (!$this->optimisedForOnlyFullGroupBy) {
+        CRM_Core_DAO::disableFullGroupByMode();
+      }
       $dao = CRM_Core_DAO::executeQuery($sql);
+      CRM_Core_DAO::reenableFullGroupByMode();
 
       $contact_ids = [];
       // Add resulting contacts to group
@@ -5937,7 +5961,9 @@ LEFT JOIN civicrm_contact {$field['alias']} ON {$field['alias']}.id = {$this->_a
         $relative = $this->_params["{$fieldName}_relative"] ?? NULL;
         $from = $this->_params["{$fieldName}_from"] ?? NULL;
         $to = $this->_params["{$fieldName}_to"] ?? NULL;
-        return $this->dateClause($field['dbAlias'], $relative, $from, $to, $field['type']);
+        $fromTime = $this->_params["{$fieldName}_from_time"] ?? NULL;
+        $toTime = $this->_params["{$fieldName}_to_time"] ?? NULL;
+        return $this->dateClause($field['dbAlias'], $relative, $from, $to, $field['type'], $fromTime, $toTime);
       }
     }
     else {

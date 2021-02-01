@@ -73,10 +73,35 @@ class CRM_Utils_MoneyTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test that using the space character as a currency works
+   * Test rounded by currency function with specified precision.
+   *
+   * @param string $thousandSeparator
+   *
+   * @dataProvider getThousandSeparators
    */
-  public function testSpaceCurrency() {
-    $this->assertEquals('  8,950.37', CRM_Utils_Money::format(8950.37, ' '));
+  public function testFormatLocaleNumericRoundedByPrecision($thousandSeparator) {
+    $this->setCurrencySeparators($thousandSeparator);
+    $result = CRM_Utils_Money::formatLocaleNumericRoundedByPrecision(8950.3678, 3);
+    $expected = ($thousandSeparator === ',') ? '8,950.368' : '8.950,368';
+    $this->assertEquals($expected, $result);
+  }
+
+  /**
+   * Test rounded by currency function with specified precision but without padding to reach it.
+   *
+   * @param string $thousandSeparator
+   *
+   * @dataProvider getThousandSeparators
+   */
+  public function testFormatLocaleNumericRoundedByOptionalPrecision($thousandSeparator) {
+    $this->setCurrencySeparators($thousandSeparator);
+    $result = CRM_Utils_Money::formatLocaleNumericRoundedByOptionalPrecision(8950.3678, 8);
+    $expected = ($thousandSeparator === ',') ? '8,950.3678' : '8.950,3678';
+    $this->assertEquals($expected, $result);
+
+    $result = CRM_Utils_Money::formatLocaleNumericRoundedByOptionalPrecision(123456789.987654321, 9);
+    $expected = ($thousandSeparator === ',') ? '123,456,789.98765' : '123.456.789,98765';
+    $this->assertEquals($result, $expected);
   }
 
   /**

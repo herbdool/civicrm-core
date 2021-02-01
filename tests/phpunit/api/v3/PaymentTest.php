@@ -183,6 +183,65 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       ],
     ];
     $this->checkPaymentResult($payment, $expectedResult);
+    $this->callAPISuccess('Payment', 'create', ['total_amount' => '-20', 'contribution_id' => $contributionID2]);
+    $this->validateAllPayments();
+  }
+
+  /**
+   * Test contribution receipts triggered by Payment.create with is_send_contribution_notification = TRUE.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testPaymentSendContributionReceipt() {
+    $mut = new CiviMailUtils($this);
+    $contribution = $this->createPartiallyPaidParticipantOrder();
+    $event = $this->callAPISuccess('Event', 'get', []);
+    $this->addLocationToEvent($event['id']);
+    $params = [
+      'contribution_id' => $contribution['id'],
+      'total_amount' => 150,
+      'check_number' => '345',
+      'trxn_date' => '2018-08-13 17:57:56',
+      'is_send_contribution_notification' => TRUE,
+    ];
+    $this->callAPISuccess('Payment', 'create', $params);
+    $contribution = $this->callAPISuccessGetSingle('Contribution', ['id' => $contribution['id']]);
+    $this->assertNotEmpty($contribution['receipt_date']);
+    $mut->checkMailLog([
+      'Price Field - Price Field 1        1   $ 100.00    $ 100.00',
+      'event place',
+      'streety street',
+    ]);
+  }
+
+  /**
+   * Test full refund when no payment has actually been record.
+   */
+  public function testFullRefundWithPaymentAlreadyRefunded() {
+    $params1 = [
+      'contact_id' => $this->_individualId,
+      'trxn_id' => 111111,
+      'total_amount' => 10,
+    ];
+    $contributionID1 = $this->contributionCreate($params1);
+    $paymentParams = ['contribution_id' => $contributionID1];
+    $this->callAPISuccess('Payment', 'create', ['total_amount' => '-10', 'contribution_id' => $contributionID1]);
+    $payment = $this->callAPISuccess('payment', 'get', $paymentParams);
+    $this->callAPISuccess('Payment', 'create', ['total_amount' => '-10', 'contribution_id' => $contributionID1]);
+    $payment = $this->callAPISuccess('payment', 'get', $paymentParams);
+    $this->validateAllPayments();
+  }
+
+  public function testNegativePaymentWithNegativeContribution() {
+    $params1 = [
+      'contact_id' => $this->_individualId,
+      'trxn_id' => 111111,
+      'total_amount' => -10,
+    ];
+    $contributionID1 = $this->contributionCreate($params1);
+    $this->callAPISuccess('Payment', 'create', ['total_amount' => '-20', 'contribution_id' => $contributionID1]);
+    $paymentParams = ['contribution_id' => $contributionID1];
+    $payment = $this->callAPISuccess('payment', 'get', $paymentParams);
     $this->validateAllPayments();
   }
 
@@ -229,8 +288,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'event place',
       'streety street',
     ]);
-    $mut->stop();
-    $mut->clearMessages();
     $this->validateAllPayments();
   }
 
@@ -263,8 +320,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'Balance Owed: $ 0.00',
       'Thank you for completing this payment.',
     ]);
-    $mut->stop();
-    $mut->clearMessages();
     $this->validateAllPayments();
   }
 
@@ -319,8 +374,6 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
       'Transaction Date: November 13th, 2018 12:01 PM',
       'Total Paid: $ 170' . $decimalSeparator . '00',
     ]);
-    $mut->stop();
-    $mut->clearMessages();
     $this->validateAllPayments();
   }
 
@@ -559,6 +612,33 @@ class api_v3_PaymentTest extends CiviUnitTestCase {
     $this->callAPISuccess('Payment', 'create', [
       'contribution_id' => $contributionID,
       'total_amount' => -90,
+    ]);
+    $contribution = $this->callAPISuccessGetSingle('Contribution', [
+      'return' => ['contribution_status_id'],
+      'id' => $contributionID,
+    ]);
+    //Assert if main contribution status is updated to "Refunded".
+    $this->assertEquals($contribution['contribution_status'], 'Refunded Label**');
+  }
+
+  /**
+   * Test negative payment using create API when the "cancelled_payment_id" param is set.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testRefundPaymentWithCancelledPaymentId() {
+    $result = $this->callAPISuccess('Contribution', 'create', [
+      'financial_type_id' => "Donation",
+      'total_amount' => 100,
+      'contact_id' => $this->_individualId,
+    ]);
+    $contributionID = $result['id'];
+
+    //Refund the complete amount.
+    $this->callAPISuccess('Payment', 'create', [
+      'contribution_id' => $contributionID,
+      'total_amount' => -100,
+      'cancelled_payment_id' => 12345,
     ]);
     $contribution = $this->callAPISuccessGetSingle('Contribution', [
       'return' => ['contribution_status_id'],

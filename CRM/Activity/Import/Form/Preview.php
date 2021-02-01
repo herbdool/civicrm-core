@@ -92,7 +92,7 @@ class CRM_Activity_Import_Form_Preview extends CRM_Import_Form_Preview {
    */
   public function postProcess() {
     $fileName = $this->controller->exportValue('DataSource', 'uploadFile');
-    $seperator = $this->controller->exportValue('DataSource', 'fieldSeparator');
+    $separator = $this->controller->exportValue('DataSource', 'fieldSeparator');
     $skipColumnHeader = $this->controller->exportValue('DataSource', 'skipColumnHeader');
     $invalidRowCount = $this->get('invalidRowCount');
     $conflictRowCount = $this->get('conflictRowCount');
@@ -100,28 +100,12 @@ class CRM_Activity_Import_Form_Preview extends CRM_Import_Form_Preview {
 
     $mapper = $this->controller->exportValue('MapField', 'mapper');
     $mapperKeys = [];
-    $mapperLocType = [];
-    $mapperPhoneType = [];
 
     foreach ($mapper as $key => $value) {
       $mapperKeys[$key] = $mapper[$key][0];
-
-      if (!empty($mapper[$key][1]) && is_numeric($mapper[$key][1])) {
-        $mapperLocType[$key] = $mapper[$key][1];
-      }
-      else {
-        $mapperLocType[$key] = NULL;
-      }
-
-      if (!empty($mapper[$key][2]) && (!is_numeric($mapper[$key][2]))) {
-        $mapperPhoneType[$key] = $mapper[$key][2];
-      }
-      else {
-        $mapperPhoneType[$key] = NULL;
-      }
     }
 
-    $parser = new CRM_Activity_Import_Parser_Activity($mapperKeys, $mapperLocType, $mapperPhoneType);
+    $parser = new CRM_Activity_Import_Parser_Activity($mapperKeys);
 
     $mapFields = $this->get('fields');
 
@@ -132,7 +116,7 @@ class CRM_Activity_Import_Form_Preview extends CRM_Import_Form_Preview {
       }
       $mapperFields[] = implode(' - ', $header);
     }
-    $parser->run($fileName, $seperator,
+    $parser->run($fileName, $separator,
       $mapperFields,
       $skipColumnHeader,
       CRM_Import_Parser::MODE_IMPORT,

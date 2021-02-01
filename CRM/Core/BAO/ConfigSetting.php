@@ -178,7 +178,7 @@ class CRM_Core_BAO_ConfigSetting {
        * If the language is specified via "lcMessages" we skip this, since the
        * intention of the URL query var is to override all other sources.
        */
-      if ($settings->get('inheritLocale') && empty($chosenLocale)) {
+      if ($settings->get('inheritLocale')) {
 
         /*
          * FIXME: On multi-language installs, CRM_Utils_System::getUFLocale() in
@@ -205,15 +205,17 @@ class CRM_Core_BAO_ConfigSetting {
         $chosenLocale = $defaultLocale;
       }
 
-      // Always assign the chosen locale to the session.
-      $session->set('lcMessages', $chosenLocale);
-
     }
     else {
 
       // CRM-11993 - Use default when it's a single-language install.
       $chosenLocale = $defaultLocale;
 
+    }
+
+    if (!$session->isEmpty()) {
+      // Always assign the chosen locale to the session.
+      $session->set('lcMessages', $chosenLocale);
     }
 
     /*

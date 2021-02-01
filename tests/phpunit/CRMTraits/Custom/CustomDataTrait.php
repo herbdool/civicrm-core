@@ -10,6 +10,8 @@
  */
 
 use Civi\Api4\CustomGroup;
+use Civi\Api4\CustomField;
+use Civi\Api4\OptionValue;
 
 /**
  * Trait Custom Data trait.
@@ -84,14 +86,15 @@ trait CRMTraits_Custom_CustomDataTrait {
    *   Params for the group to be created.
    * @param string $customFieldType
    *
-   * @param string $identifier
+   * @param string|null $identifier
+   *
+   * @param array $fieldParams
    *
    * @throws \API_Exception
    * @throws \CRM_Core_Exception
-   * @throws \Civi\API\Exception\UnauthorizedException
    */
-  public function createCustomGroupWithFieldOfType($groupParams = [], $customFieldType = 'text', $identifier = NULL) {
-    $supported = ['text', 'select', 'date', 'int', 'contact_reference', 'radio'];
+  public function createCustomGroupWithFieldOfType($groupParams = [], $customFieldType = 'text', $identifier = NULL, $fieldParams = []): void {
+    $supported = ['text', 'select', 'date', 'checkbox', 'int', 'contact_reference', 'radio', 'multi_country'];
     if (!in_array($customFieldType, $supported, TRUE)) {
       throw new CRM_Core_Exception('we have not yet extracted other custom field types from createCustomFieldsOfAllTypes, Use consistent syntax when you do');
     }
@@ -99,7 +102,7 @@ trait CRMTraits_Custom_CustomDataTrait {
     $groupParams['name'] = $identifier ?? 'Custom Group';
     $this->createCustomGroup($groupParams);
     $reference = &$this->ids['CustomField'][$identifier . $customFieldType];
-    $fieldParams = ['custom_group_id' => $this->ids['CustomGroup'][$groupParams['name']]];
+    $fieldParams = array_merge($fieldParams, ['custom_group_id' => $this->ids['CustomGroup'][$groupParams['name']]]);
     switch ($customFieldType) {
       case 'text':
         $reference = $this->createTextCustomField($fieldParams)['id'];
@@ -107,6 +110,10 @@ trait CRMTraits_Custom_CustomDataTrait {
 
       case 'select':
         $reference = $this->createSelectCustomField($fieldParams)['id'];
+        return;
+
+      case 'checkbox':
+        $reference = $this->createStringCheckboxCustomField($fieldParams)['id'];
         return;
 
       case 'int':
@@ -123,6 +130,10 @@ trait CRMTraits_Custom_CustomDataTrait {
 
       case 'radio':
         $reference = $this->createIntegerRadioCustomField($fieldParams)['id'];
+        return;
+
+      case 'multi_country':
+        $reference = $this->createMultiCountryCustomField($fieldParams)['id'];
         return;
 
     }
@@ -146,6 +157,7 @@ trait CRMTraits_Custom_CustomDataTrait {
     $ids['state'] = (int) $this->createStateCustomField(['custom_group_id' => $customGroupID])['id'];
     $ids['multi_state'] = (int) $this->createMultiStateCustomField(['custom_group_id' => $customGroupID])['id'];
     $ids['boolean'] = (int) $this->createBooleanCustomField(['custom_group_id' => $customGroupID])['id'];
+    $ids['checkbox'] = (int) $this->createStringCheckboxCustomField(['custom_group_id' => $customGroupID])['id'];
     return $ids;
   }
 
@@ -165,6 +177,25 @@ trait CRMTraits_Custom_CustomDataTrait {
   }
 
   /**
+   * Add another option to the custom field.
+   *
+   * @param string $key
+   * @param array $values
+   *
+   * @return int
+   * @throws \API_Exception
+   */
+  protected function addOptionToCustomField($key, $values) {
+    $optionGroupID = CustomField::get(FALSE)
+      ->addWhere('id', '=', $this->getCustomFieldID($key))
+      ->addSelect('option_group_id')
+      ->execute()->first()['option_group_id'];
+    return (int) OptionValue::create(FALSE)
+      ->setValues(array_merge(['option_group_id' => $optionGroupID], $values))
+      ->execute()->first()['value'];
+  }
+
+  /**
    * Get the custom field name for the relevant key.
    *
    * e.g returns 'custom_5' where 5 is the id of the field using the key.
@@ -177,6 +208,34 @@ trait CRMTraits_Custom_CustomDataTrait {
    */
   protected function getCustomFieldID($key) {
     return $this->ids['CustomField'][$key];
+  }
+
+  /**
+   * Get the option group id of the created field.
+   *
+   * @param string $key
+   *
+   * @return string
+   */
+  protected function getOptionGroupID(string $key): string {
+    return (string) $this->callAPISuccessGetValue('CustomField', [
+      'id' => $this->getCustomFieldID($key),
+      'return' => 'option_group_id',
+    ]);
+  }
+
+  /**
+   * Get the option group id of the created field.
+   *
+   * @param string $key
+   *
+   * @return string
+   */
+  protected function getOptionGroupName(string $key): string {
+    return (string) $this->callAPISuccessGetValue('CustomField', [
+      'id' => $this->getCustomFieldID($key),
+      'return' => 'option_group_id.name',
+    ]);
   }
 
   /**
@@ -323,6 +382,19 @@ trait CRMTraits_Custom_CustomDataTrait {
   }
 
   /**
+   * Create custom select field.
+   *
+   * @param array $params
+   *   Parameter overrides, must include custom_group_id.
+   *
+   * @return array
+   */
+  protected function createAutoCompleteCustomField(array $params): array {
+    $params = array_merge($this->getFieldsValuesByType('String', 'Autocomplete-Select'), $params);
+    return $this->callAPISuccess('custom_field', 'create', $params)['values'][0];
+  }
+
+  /**
    * Create a custom field of  type date.
    *
    * @param array $params
@@ -331,6 +403,18 @@ trait CRMTraits_Custom_CustomDataTrait {
    */
   protected function createDateCustomField($params): array {
     $params = array_merge($this->getFieldsValuesByType('Date'), $params);
+    return $this->callAPISuccess('custom_field', 'create', $params)['values'][0];
+  }
+
+  /**
+   * Create a custom field of  type radio with integer values.
+   *
+   * @param array $params
+   *
+   * @return array
+   */
+  protected function createStringCheckboxCustomField(array $params): array {
+    $params = array_merge($this->getFieldsValuesByType('String', 'CheckBox'), $params);
     return $this->callAPISuccess('custom_field', 'create', $params)['values'][0];
   }
 
@@ -440,28 +524,34 @@ trait CRMTraits_Custom_CustomDataTrait {
           ],
         ],
         'CheckBox' => [
-          'label' => 'Pick Color',
+          'label' => 'Pick Shade',
           'html_type' => 'CheckBox',
           'data_type' => 'String',
           'text_length' => '',
           'default_value' => '',
           'option_values' => [
             [
-              'label' => 'Red',
-              'value' => 'R',
+              'label' => 'Lilac',
+              'value' => 'L',
               'weight' => 1,
               'is_active' => 1,
             ],
             [
-              'label' => 'Yellow',
-              'value' => 'Y',
+              'label' => 'Purple',
+              'value' => 'P',
               'weight' => 2,
               'is_active' => 1,
             ],
             [
-              'label' => 'Green',
-              'value' => 'G',
+              'label' => 'Mauve',
+              'value' => 'M',
               'weight' => 3,
+              'is_active' => 1,
+            ],
+            [
+              'label' => 'Violet',
+              'value' => 'V',
+              'weight' => 4,
               'is_active' => 1,
             ],
           ],

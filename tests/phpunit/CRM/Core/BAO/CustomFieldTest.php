@@ -135,7 +135,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
     $fieldsToCreate = [
       [
         'data_type' => 'Country',
-        'html_type' => 'Select Country',
+        'html_type' => 'Select',
         'tests' => [
           'United States' => 1228,
           '' => NULL,
@@ -143,7 +143,8 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
       ],
       [
         'data_type' => 'StateProvince',
-        'html_type' => 'Multi-Select State/Province',
+        'html_type' => 'Select',
+        'serialize' => 1,
         'tests' => [
           '' => 0,
           'Alabama' => 1000,
@@ -296,21 +297,21 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
       'custom_group_id' => $groups['A']['id'],
       'label' => 'Country A',
       'dataType' => 'Country',
-      'htmlType' => 'Select Country',
+      'htmlType' => 'Select',
       'default_value' => NULL,
     ]);
     $countryB = $this->customFieldCreate([
       'custom_group_id' => $groups['A']['id'],
       'label' => 'Country B',
       'dataType' => 'Country',
-      'htmlType' => 'Select Country',
+      'htmlType' => 'Select',
       'default_value' => NULL,
     ]);
     $countryC = $this->customFieldCreate([
       'custom_group_id' => $groups['B']['id'],
       'label' => 'Country C',
       'dataType' => 'Country',
-      'htmlType' => 'Select Country',
+      'htmlType' => 'Select',
       'default_value' => NULL,
     ]);
 
@@ -344,7 +345,6 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
     CRM_Core_BAO_CustomField::moveField($fields['countryB']['id'], $groupB['id']);
 
     // Group[A] no longer has fields[countryB]
-    $errorScope = CRM_Core_TemporaryErrorScope::useException();
     try {
       $this->assertDBQuery(1, "SELECT {$fields['countryB']['column_name']} FROM " . $groupA['table_name']);
       $this->fail('Expected exception when querying column on wrong table');
@@ -460,7 +460,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'options_per_line' => NULL,
         'text_length' => NULL,
         'data_type' => 'Country',
-        'html_type' => 'Select Country',
+        'html_type' => 'Select',
         'is_search_range' => '0',
         'id' => $this->getCustomFieldID('country'),
         'label' => 'Country',
@@ -481,7 +481,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.' . $this->getCustomFieldColumnName('country'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
         'pseudoconstant' => [
           'table' => 'civicrm_country',
           'keyColumn' => 'id',
@@ -499,7 +499,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'options_per_line' => NULL,
         'text_length' => NULL,
         'data_type' => 'Country',
-        'html_type' => 'Select Country',
+        'html_type' => 'Select',
         'is_search_range' => '0',
         'id' => $this->getCustomFieldID('multi_country'),
         'label' => 'Country-multi',
@@ -559,7 +559,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.my_file_' . $this->getCustomFieldID('file'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
       ],
       $this->getCustomFieldName('text') => [
         'name' => $this->getCustomFieldName('text'),
@@ -593,7 +593,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
         'maxlength' => 300,
-        'serialize' => NULL,
+        'serialize' => 0,
       ],
       $this->getCustomFieldName('select_string') => [
         'name' => $this->getCustomFieldName('select_string'),
@@ -617,7 +617,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'extends_entity_column_id' => NULL,
         'is_view' => '0',
         'is_multiple' => '0',
-        'option_group_id' => $this->callAPISuccessGetValue('CustomField', ['id' => $this->getCustomFieldID('select_string'), 'return' => 'option_group_id']),
+        'option_group_id' => $this->getOptionGroupID('select_string'),
         'date_format' => NULL,
         'time_format' => NULL,
         'is_required' => 0,
@@ -626,7 +626,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.pick_color_' . $this->getCustomFieldID('select_string'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
         'pseudoconstant' => [
           'optionGroupName' => $this->callAPISuccessGetValue('CustomField', ['id' => $this->getCustomFieldID('select_string'), 'return' => 'option_group_id.name']),
           'optionEditPath' => 'civicrm/admin/options/' . $this->callAPISuccessGetValue('CustomField', ['id' => $this->getCustomFieldID('select_string'), 'return' => 'option_group_id.name']),
@@ -663,7 +663,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.test_date_' . $this->getCustomFieldID('select_date'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
       ],
       $this->getCustomFieldName('link') => [
         'name' => $this->getCustomFieldName('link'),
@@ -696,7 +696,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.test_link_' . $this->getCustomFieldID('link'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
       ],
       $this->getCustomFieldName('int') => [
         'name' => $this->getCustomFieldName('int'),
@@ -729,7 +729,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.' . $this->getCustomFieldColumnName('int'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
       ],
       $this->getCustomFieldName('contact_reference') => [
         'name' => $this->getCustomFieldName('contact_reference'),
@@ -762,7 +762,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.' . $this->getCustomFieldColumnName('contact_reference'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
       ],
       $this->getCustomFieldName('state') => [
         'name' => $this->getCustomFieldName('state'),
@@ -788,7 +788,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'where' => 'civicrm_value_custom_group_' . $customGroupID . '.' . $this->getCustomFieldColumnName('state'),
         'extends_table' => 'civicrm_contact',
         'search_table' => 'contact_a',
-        'serialize' => NULL,
+        'serialize' => 0,
         'pseudoconstant' => [
           'table' => 'civicrm_state_province',
           'keyColumn' => 'id',
@@ -797,7 +797,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'import' => 1,
         'data_type' => 'StateProvince',
         'type' => 1,
-        'html_type' => 'Select State/Province',
+        'html_type' => 'Select',
         'text_length' => NULL,
         'options_per_line' => NULL,
         'is_search_range' => '0',
@@ -835,7 +835,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'data_type' => 'StateProvince',
         'name' => $this->getCustomFieldName('multi_state'),
         'type' => 1,
-        'html_type' => 'Select State/Province',
+        'html_type' => 'Select',
         'text_length' => NULL,
         'options_per_line' => NULL,
         'is_search_range' => '0',
@@ -871,9 +871,47 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
         'text_length' => NULL,
         'options_per_line' => NULL,
         'is_search_range' => '0',
-        'serialize' => NULL,
+        'serialize' => 0,
         'pseudoconstant' => [
           'callback' => 'CRM_Core_SelectValues::boolean',
+        ],
+      ],
+      $this->getCustomFieldName('checkbox') => [
+        'name' => $this->getCustomFieldName('checkbox'),
+        'custom_field_id' => $this->getCustomFieldID('checkbox'),
+        'id' => $this->getCustomFieldID('checkbox'),
+        'groupTitle' => 'Custom Group',
+        'default_value' => NULL,
+        'option_group_id' => $this->getOptionGroupID('checkbox'),
+        'custom_group_id' => $customGroupID,
+        'extends' => 'Contact',
+        'extends_entity_column_value' => NULL,
+        'extends_entity_column_id' => NULL,
+        'is_view' => '0',
+        'is_multiple' => '0',
+        'date_format' => NULL,
+        'time_format' => NULL,
+        'is_required' => 0,
+        'table_name' => 'civicrm_value_custom_group_' . $customGroupID,
+        'column_name' => $this->getCustomFieldColumnName('checkbox'),
+        'where' => 'civicrm_value_custom_group_' . $customGroupID . '.' . $this->getCustomFieldColumnName('checkbox'),
+        'extends_table' => 'civicrm_contact',
+        'search_table' => 'contact_a',
+        'import' => 1,
+        'label' => 'Pick Shade',
+        'headerPattern' => '//',
+        'title' => 'Pick Shade',
+        'data_type' => 'String',
+        'type' => 2,
+        'html_type' => 'CheckBox',
+        'text_length' => NULL,
+        'options_per_line' => NULL,
+        'is_search_range' => '0',
+        'serialize' => '1',
+        'pseudoconstant' => [
+          'optionGroupName' => $this->getOptionGroupName('checkbox'),
+          'optionEditPath' => 'civicrm/admin/options/' . $this->getOptionGroupName('checkbox'),
+
         ],
       ],
     ];
@@ -909,7 +947,7 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
     ]);
     $dao = CRM_Core_DAO::executeQuery(('SHOW CREATE TABLE ' . $customGroup['values'][$customGroup['id']]['table_name']));
     $dao->fetch();
-    $this->assertContains('`test_link_2` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL', $dao->Create_Table);
+    $this->assertContains('`test_link_2` varchar(255) COLLATE ' . CRM_Core_BAO_SchemaHandler::getInUseCollation() . ' DEFAULT NULL', $dao->Create_Table);
     $this->assertContains('KEY `INDEX_my_text` (`my_text`)', $dao->Create_Table);
   }
 
@@ -980,6 +1018,49 @@ class CRM_Core_BAO_CustomFieldTest extends CiviUnitTestCase {
     if ($fieldInfo['name'] == 'alter_cf_field') {
       $displayValue = 'New value';
     }
+  }
+
+  /**
+   * Test for single select Autocomplete custom field.
+   *
+   */
+  public function testSingleSelectAutoComplete() {
+    $customGroupId = $this->customGroupCreate([
+      'extends' => 'Individual',
+    ])['id'];
+    $colors = ['Y' => 'Yellow', 'G' => 'Green'];
+    $fieldId = $this->createAutoCompleteCustomField([
+      'custom_group_id' => $customGroupId,
+      'option_values' => $colors,
+    ])['id'];
+    $contactId = $this->individualCreate(['custom_' . $fieldId => 'Y']);
+    $value = $this->callAPISuccessGetValue('Contact', [
+      'id' => $contactId,
+      'return' => 'custom_' . $fieldId,
+    ]);
+    $this->assertEquals('Y', $value);
+  }
+
+  /**
+   * Test for multi select Autocomplete custom field.
+   *
+   */
+  public function testMultiSelectAutoComplete() {
+    $customGroupId = $this->customGroupCreate([
+      'extends' => 'Individual',
+    ])['id'];
+    $colors = ['Y' => 'Yellow', 'G' => 'Green'];
+    $fieldId = $this->createAutoCompleteCustomField([
+      'custom_group_id' => $customGroupId,
+      'serialize' => '1',
+      'option_values' => $colors,
+    ])['id'];
+    $contactId = $this->individualCreate(['custom_' . $fieldId => ['Y', 'G']]);
+    $value = $this->callAPISuccessGetValue('Contact', [
+      'id' => $contactId,
+      'return' => 'custom_' . $fieldId,
+    ]);
+    $this->assertEquals(array_keys($colors), $value);
   }
 
 }

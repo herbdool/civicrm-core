@@ -324,7 +324,7 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
       }
     }
     if (!$joinDate) {
-      $joinDate = date('Y-m-d');
+      $joinDate = CRM_Utils_Time::date('Y-m-d');
     }
     $actualStartDate = $joinDate;
     if ($startDate) {
@@ -531,7 +531,7 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
       // CRM=7297 Membership Upsell: we need to handle null end_date in case we are switching
       // from a lifetime to a different membership type
       if (is_null($membershipDetails->end_date)) {
-        $date = date('Y-m-d');
+        $date = CRM_Utils_Time::date('Y-m-d');
       }
       else {
         $date = $membershipDetails->end_date;
@@ -581,14 +581,14 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
           $year
         ));
       }
-      $today = date('Y-m-d');
+      $today = CRM_Utils_Time::date('Y-m-d');
       $membershipDates['today'] = CRM_Utils_Date::customFormat($today, '%Y%m%d');
       $membershipDates['start_date'] = CRM_Utils_Date::customFormat($startDate, '%Y%m%d');
       $membershipDates['end_date'] = CRM_Utils_Date::customFormat($endDate, '%Y%m%d');
       $membershipDates['log_start_date'] = CRM_Utils_Date::customFormat($logStartDate, '%Y%m%d');
     }
     else {
-      $today = date('Y-m-d');
+      $today = CRM_Utils_Time::date('Y-m-d');
       if ($changeToday) {
         $today = CRM_Utils_Date::processDate($changeToday, NULL, FALSE, 'Y-m-d');
       }
@@ -635,7 +635,7 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
   }
 
   /**
-   * The function returns all the Organization for  all membershipTypes .
+   * The function returns all the Organization for all membershipTypes .
    *
    * @param int $membershipTypeId
    *
@@ -814,6 +814,8 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
    * Caching is by domain - if that hits any issues we should add a new function getDomainMembershipTypes
    * or similar rather than 'just add another param'! but this is closer to earlier behaviour so 'should' be OK.
    *
+   * @return array
+   *   List of membershipType details keyed by membershipTypeID
    * @throws \CiviCRM_API3_Exception
    */
   public static function getAllMembershipTypes() {
@@ -821,7 +823,7 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
     if (!Civi::cache('metadata')->has($cacheString)) {
       $types = civicrm_api3('MembershipType', 'get', ['options' => ['limit' => 0, 'sort' => 'weight']])['values'];
       $taxRates = CRM_Core_PseudoConstant::getTaxRates();
-      $keys = ['description', 'relationship_type_id', 'relationship_direction', 'max_related'];
+      $keys = ['description', 'relationship_type_id', 'relationship_direction', 'max_related', 'auto_renew'];
       // In order to avoid down-stream e-notices we undo api v3 filtering of NULL values. This is covered
       // in Unit tests & ideally we might switch to apiv4 but I would argue we should build caching
       // of metadata entities like this directly into apiv4.
@@ -838,6 +840,9 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
         $multiplier = 1;
         if ($types[$id]['tax_rate'] !== 0.0) {
           $multiplier += ($types[$id]['tax_rate'] / 100);
+        }
+        if (!array_key_exists('minimum_fee', $types[$id])) {
+          $types[$id]['minimum_fee'] = 0;
         }
         $types[$id]['minimum_fee_with_tax'] = (float) $types[$id]['minimum_fee'] * $multiplier;
       }
@@ -856,23 +861,6 @@ class CRM_Member_BAO_MembershipType extends CRM_Member_DAO_MembershipType {
    */
   public static function getMembershipType($id) {
     return self::getAllMembershipTypes()[$id];
-  }
-
-  /**
-   * Get an array of all membership types the contact is permitted to access.
-   *
-   * @throws \CiviCRM_API3_Exception
-   */
-  public static function getPermissionedMembershipTypes() {
-    $types = self::getAllMembershipTypes();
-    $financialTypes = NULL;
-    $financialTypes = CRM_Financial_BAO_FinancialType::getAvailableFinancialTypes($financialTypes, CRM_Core_Action::ADD);
-    foreach ($types as $id => $type) {
-      if (!isset($financialTypes[$type['financial_type_id']])) {
-        unset($types[$id]);
-      }
-    }
-    return $types;
   }
 
 }

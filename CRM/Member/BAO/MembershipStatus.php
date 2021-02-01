@@ -17,19 +17,6 @@
 class CRM_Member_BAO_MembershipStatus extends CRM_Member_DAO_MembershipStatus {
 
   /**
-   * Static holder for the default LT.
-   * @var int
-   */
-  public static $_defaultMembershipStatus = NULL;
-
-  /**
-   * Class constructor.
-   */
-  public function __construct() {
-    parent::__construct();
-  }
-
-  /**
    * Fetch object based on array of properties.
    *
    * @param array $params
@@ -68,26 +55,21 @@ class CRM_Member_BAO_MembershipStatus extends CRM_Member_DAO_MembershipStatus {
    * Takes an associative array and creates a membership Status object.
    *
    * @param array $params
-   *   (reference ) an assoc array of name/value pairs.
+   *   Array of name/value pairs.
    *
-   * @throws Exception
-   * @return CRM_Member_BAO_MembershipStatus
+   * @throws CRM_Core_Exception
+   * @return CRM_Member_DAO_MembershipStatus
    */
   public static function create($params) {
-    $ids = [];
-    if (!empty($params['id'])) {
-      $ids['membershipStatus'] = $params['id'];
-    }
-    else {
+    if (empty($params['id'])) {
       //don't allow duplicate names - if id not set
       $status = new CRM_Member_DAO_MembershipStatus();
       $status->name = $params['name'];
       if ($status->find(TRUE)) {
-        throw new Exception('A membership status with this name already exists.');
+        throw new CRM_Core_Exception('A membership status with this name already exists.');
       }
     }
-    $membershipStatusBAO = CRM_Member_BAO_MembershipStatus::add($params, $ids);
-    return $membershipStatusBAO;
+    return self::add($params);
   }
 
   /**
@@ -98,10 +80,12 @@ class CRM_Member_BAO_MembershipStatus extends CRM_Member_DAO_MembershipStatus {
    * @param array $ids
    *   Array contains the id - this param is deprecated.
    *
-   *
-   * @return object
+   * @return CRM_Member_DAO_MembershipStatus
    */
   public static function add(&$params, $ids = []) {
+    if (!empty($ids)) {
+      CRM_Core_Error::deprecatedFunctionWarning('ids is a deprecated parameter');
+    }
     $id = $params['id'] ?? $ids['membershipStatus'] ?? NULL;
     if (!$id) {
       CRM_Core_DAO::setCreateDefaults($params, self::getDefaults());
@@ -225,16 +209,16 @@ class CRM_Member_BAO_MembershipStatus extends CRM_Member_DAO_MembershipStatus {
    */
   public static function getMembershipStatusByDate(
     $startDate, $endDate, $joinDate,
-    $statusDate = 'today', $excludeIsAdmin = FALSE, $membershipTypeID = NULL, $membership = []
+    $statusDate = 'now', $excludeIsAdmin = FALSE, $membershipTypeID = NULL, $membership = []
   ) {
     $membershipDetails = [];
 
-    if (!$statusDate || $statusDate == 'today') {
-      $statusDate = date('Ymd');
+    if (!$statusDate || $statusDate === 'today') {
+      $statusDate = 'now';
+      CRM_Core_Error::deprecatedFunctionWarning('pass now rather than today in');
     }
-    else {
-      $statusDate = CRM_Utils_Date::customFormat($statusDate, '%Y%m%d');
-    }
+
+    $statusDate = date('Ymd', CRM_Utils_Time::strtotime($statusDate));
 
     //fix for CRM-3570, if we have statuses with is_admin=1,
     //exclude these statuses from calculatation during import.
@@ -252,9 +236,9 @@ class CRM_Member_BAO_MembershipStatus extends CRM_Member_DAO_MembershipStatus {
     $membershipStatus = CRM_Core_DAO::executeQuery($query);
 
     $dates = [
-      'start' => ($startDate && $startDate !== 'null') ? date('Ymd', strtotime($startDate)) : '',
-      'end' => ($endDate && $endDate !== 'null') ? date('Ymd', strtotime($endDate)) : '',
-      'join' => ($joinDate && $joinDate !== 'null') ? date('Ymd', strtotime($joinDate)) : '',
+      'start' => ($startDate && $startDate !== 'null') ? date('Ymd', CRM_Utils_Time::strtotime($startDate)) : '',
+      'end' => ($endDate && $endDate !== 'null') ? date('Ymd', CRM_Utils_Time::strtotime($endDate)) : '',
+      'join' => ($joinDate && $joinDate !== 'null') ? date('Ymd', CRM_Utils_Time::strtotime($joinDate)) : '',
     ];
 
     while ($membershipStatus->fetch()) {
@@ -269,9 +253,9 @@ class CRM_Member_BAO_MembershipStatus extends CRM_Member_DAO_MembershipStatus {
             if ($membershipStatus->{$eve . '_event_adjust_unit'} &&
               $membershipStatus->{$eve . '_event_adjust_interval'}
             ) {
-              $month = date('m', strtotime($date));
-              $day = date('d', strtotime($date));
-              $year = date('Y', strtotime($date));
+              $month = date('m', CRM_Utils_Time::strtotime($date));
+              $day = date('d', CRM_Utils_Time::strtotime($date));
+              $year = date('Y', CRM_Utils_Time::strtotime($date));
               // add in months
               if ($membershipStatus->{$eve . '_event_adjust_unit'} === 'month') {
                 ${$eve . 'Event'} = date('Ymd', mktime(0, 0, 0,

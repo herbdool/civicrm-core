@@ -63,6 +63,16 @@ class CiviMailUtils extends PHPUnit\Framework\TestCase {
   }
 
   /**
+   * Clean up after test.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function __destruct() {
+    $this->stop();
+    $this->clearMessages();
+  }
+
+  /**
    * Start writing emails to db instead of current option.
    */
   public function start() {
@@ -346,13 +356,13 @@ class CiviMailUtils extends PHPUnit\Framework\TestCase {
   }
 
   /**
-   * @param $strings
+   * @param array $strings
    * @param $absentStrings
    * @param $prefix
    * @param $mail
    * @return mixed
    */
-  public function checkMailForStrings($strings, $absentStrings, $prefix, $mail) {
+  public function checkMailForStrings(array $strings, $absentStrings = [], $prefix = '', $mail) {
     foreach ($strings as $string) {
       $this->_ut->assertContains($string, $mail, "$string .  not found in  $mail  $prefix");
     }

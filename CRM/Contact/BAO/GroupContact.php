@@ -253,10 +253,6 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
    *   this array has key-> group id and value group title
    */
   public static function getGroupList($contactId = 0, $visibility = FALSE) {
-    $group = new CRM_Contact_DAO_Group();
-
-    $select = $from = $where = '';
-
     $select = 'SELECT civicrm_group.id, civicrm_group.title ';
     $from = ' FROM civicrm_group ';
     $where = " WHERE civicrm_group.is_active = 1 ";
@@ -274,7 +270,7 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
     $orderby = " ORDER BY civicrm_group.name";
     $sql = $select . $from . $where . $groupBy . $orderby;
 
-    $group->query($sql);
+    $group = CRM_Core_DAO::executeQuery($sql);
 
     $values = [];
     while ($group->fetch()) {
@@ -308,6 +304,8 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
    *
    * @param bool $includeSmartGroups
    *   Include or Exclude Smart Group(s)
+   * @param bool $public
+   *   Are we returning groups for use on a public page.
    *
    * @return array|int
    *   the relevant data object values for the contact or the total count when $count is TRUE
@@ -321,7 +319,8 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
     $onlyPublicGroups = FALSE,
     $excludeHidden = TRUE,
     $groupId = NULL,
-    $includeSmartGroups = FALSE
+    $includeSmartGroups = FALSE,
+    $public = FALSE
   ) {
     if ($count) {
       $select = 'SELECT count(DISTINCT civicrm_group_contact.id)';
@@ -330,6 +329,7 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
       $select = 'SELECT
                     civicrm_group_contact.id as civicrm_group_contact_id,
                     civicrm_group.title as group_title,
+                    civicrm_group.frontend_title as group_public_title,
                     civicrm_group.visibility as visibility,
                     civicrm_group_contact.status as status,
                     civicrm_group.id as group_id,
@@ -397,7 +397,7 @@ class CRM_Contact_BAO_GroupContact extends CRM_Contact_DAO_GroupContact {
         $id = $dao->civicrm_group_contact_id;
         $values[$id]['id'] = $id;
         $values[$id]['group_id'] = $dao->group_id;
-        $values[$id]['title'] = $dao->group_title;
+        $values[$id]['title'] = ($public && !empty($group->group_public_title) ? $group->group_public_title : $dao->group_title);
         $values[$id]['visibility'] = $dao->visibility;
         $values[$id]['is_hidden'] = $dao->is_hidden;
         switch ($dao->status) {
@@ -555,7 +555,7 @@ SELECT    *
       ['group', 'IN', [$groupID], 0, 0],
       ['contact_id', '=', $contactID, 0, 0],
     ];
-    list($contacts, $_) = CRM_Contact_BAO_Query::apiQuery($params, ['contact_id']);
+    [$contacts] = CRM_Contact_BAO_Query::apiQuery($params, ['contact_id']);
 
     if (!empty($contacts)) {
       return TRUE;

@@ -39,6 +39,10 @@
   name        : Pengyi Zhang
   organization: Agileware
 
+- github      : ahed-compucorp
+  name        : Ahed
+  organization: CompuCorp
+
 - github      : ajdavis
   name        : A. Jesse Jiryu Davis
   organization: MongoDB
@@ -88,6 +92,7 @@
 - github      : andrew-cormick-dockery
   name        : Andrew Cormick-Dockery
   jira        : andrew_dockery
+  organization: Australian Greens
 
 - github      : andrewperry
   name        : Andrew Perry
@@ -140,6 +145,9 @@
 - name        : Sean Prónay
   organization: Apple Street Market
   jira        : ASMC
+
+- github      : AsylumSeekersCentre
+  name        : Asylum Seekers Centre
 
 - github      : artfulrobot
   name        : Rich Lott
@@ -379,6 +387,10 @@
 
 - github      : don-alejandro-z
 
+- github      : dwoods-encircle
+  organization: enCircle Solutions Ltd.
+  name        : Darren Woods
+
 - github      : Erioldoesdesign
   organization: Third Sector Design
   name        : Eriol Fox;
@@ -447,6 +459,9 @@
   name        : Elliott Eggleston
   organization: Wikimedia Foundation
   jira        : ejegg
+
+- github      : elcapo
+  name        : Carlos Capote
 
 - github      : elisseck
   name        : Eli Lisseck
@@ -595,6 +610,9 @@
 
 - github      : GValFr35
 
+- github      : irenemeisel
+  name        : Irene Meisel
+
 - github      : kewljuice
   name        : Wouter Hechtermans
   organization: Calibrate
@@ -735,6 +753,9 @@
   name        : Jason Gillman Jr.
   organization: Liquid Web, Inc.
 
+- github      : jgrygierek
+  name        : Jarek
+
 - github      : jitendrapurohit
   name        : Jitendra Purohit
   organization: Fuzion
@@ -812,6 +833,8 @@
   name        : Justin Freeman
   organization: Agileware
 
+- github      : jvos
+
 - github      : kainuk
   name        : Klaas Eikelboom
   organization: CiviCoop
@@ -882,6 +905,9 @@
   organization: Web Access
   jira        : kurund
 
+- github      : lalgwebdev
+  name        : Tony Maynard-Smith
+
 - github      : larssg-wildsight
   name        : Lars Sanders-Green
   organization: Wildsight
@@ -943,6 +969,8 @@
   name        : Lisa Taliano
   organization: National Urban League
 
+- github      : lucky091588
+
 - github      : lyyana
   name        : Yuliyana Liyana
   organization: Oxfam Germany
@@ -968,10 +996,14 @@
 - name        : Manish Zope
   jira        : manish
 
-- github      : marsh-circle
+- github      : MarshCastle
   name        : Martin Castle
   organization: Circle Interactive
   jira        : marshCircle
+
+- github      : masetto
+  organization: PERORA SRL
+  name        : Samuele Masetto
 
 - github      : mathavanveda
   name        : Mathavan Veeramuthu
@@ -992,6 +1024,12 @@
 - github      : martinh-pw
   name        : Martin Hansen
   organization: PeaceWorks Technology Solutions
+
+- github      : maxtsero
+  name        : Max Tsero
+  organization: Atomic Development
+
+- github      : maynardsmith
 
 - github      : mc0e
   name        : Andrew McNaughton
@@ -1017,6 +1055,10 @@
   name        : Mark Burdett
   organization: Electronic Frontier Foundation
   jira        : mfb
+
+- github      : mglaman
+  name        : Matt Glaman
+  organization: Bluehorn Digital
 
 - github      : mgribaudo
   name        : Marcello Gribaudo
@@ -1115,8 +1157,12 @@
   organization: CompuCorp
   jira        : mukesh
 
+- github      : muniodiego
+  name        : Diego Muñio
+
 - github      : mwestergaard
   name        : Mark Westergaard
+  organization: iXiam
 
 - github      : nbrettell
   name        : Nathan Brettell
@@ -1134,6 +1180,9 @@
   name        : Niels Heinemann
   organization: Kompetenzzentrum Technik-Diversity-Chancengleichheit
   jira        : nielo
+
+- github      : nishant-bhorodia
+  name        : Nishant Bhorodia
 
 - github      : highfalutin
   name        : Noah Miller
@@ -1270,6 +1319,8 @@
 - name        : Rareș Pamfil
   jira        : rares
 
+- github      : Rar9
+
 - github      : ray-wright
   name        : Ray Wright
 
@@ -1342,6 +1393,9 @@
 
 - name        : Steve Binkowski
   jira        : s.bink
+
+- github      : shaneonabike
+  name        :  Abeilles en Vélo / Bees on a bike
 
 - name        : Sheila Burkett
   organization: Spry Digital
@@ -1460,7 +1514,7 @@
 
 - github      : sunilpawar
   name        : Sunil Pawar
-  organization: CiviDesk
+  organization: Skvare
   jira        : sunil
 
 - github      : swastikpareek
@@ -1676,3 +1730,12 @@
 - github      : UshaMakoa
   name        : Usha F. Matisson
   organization: Makoa
+
+- github      : ahed-compucorp
+  name        : Ahed Eid
+  organization: CompuCorp
+
+- github      : wintermoor
+  name        : Torben Bertram
+  organization: ECOPLAN
+  

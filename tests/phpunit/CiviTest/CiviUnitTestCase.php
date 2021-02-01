@@ -135,6 +135,23 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
   protected $ids = [];
 
   /**
+   * Should financials be checked after the test but before tear down.
+   *
+   * Ideally all tests (or at least all that call any financial api calls ) should do this but there
+   * are some test data issues and some real bugs currently blockinng.
+   *
+   * @var bool
+   */
+  protected $isValidateFinancialsOnPostAssert = FALSE;
+
+  /**
+   * Should location types be checked to ensure primary addresses are correctly assigned after each test.
+   *
+   * @var bool
+   */
+  protected $isLocationTypesOnPostAssert = TRUE;
+
+  /**
    * Class used for hooks during tests.
    *
    * This can be used to test hooks within tests. For example in the ACL_PermissionTrait:
@@ -228,7 +245,8 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     static $dbName = NULL;
     if ($dbName === NULL) {
       require_once "DB.php";
-      $dsninfo = DB::parseDSN(CIVICRM_DSN);
+      $dsn = CRM_Utils_SQL::autoSwitchDSN(CIVICRM_DSN);
+      $dsninfo = DB::parseDSN($dsn);
       $dbName = $dsninfo['database'];
     }
     return $dbName;
@@ -305,8 +323,6 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
 
     $this->_apiversion = 3;
 
-    // REVERT
-    $this->errorScope = CRM_Core_TemporaryErrorScope::useException();
     //  Use a temporary file for STDIN
     $GLOBALS['stdin'] = tmpfile();
     if ($GLOBALS['stdin'] === FALSE) {
@@ -476,6 +492,22 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     $this->unsetExtensionSystem();
     $this->assertEquals([], CRM_Core_DAO::$_nullArray);
     $this->assertEquals(NULL, CRM_Core_DAO::$_nullObject);
+  }
+
+  /**
+   * CHeck that all tests that have created payments have created them with the right financial entities.
+   *
+   * @throws \CRM_Core_Exception
+   */
+  protected function assertPostConditions() {
+    if ($this->isLocationTypesOnPostAssert) {
+      $this->assertLocationValidity();
+    }
+    if (!$this->isValidateFinancialsOnPostAssert) {
+      return;
+    }
+    $this->validateAllPayments();
+    $this->validateAllContributions();
   }
 
   /**
@@ -703,19 +735,17 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @return mixed
    * @throws \CRM_Core_Exception
    */
-  public function paymentProcessorTypeCreate($params = NULL) {
-    if (is_null($params)) {
-      $params = [
-        'name' => 'API_Test_PP',
-        'title' => 'API Test Payment Processor',
-        'class_name' => 'CRM_Core_Payment_APITest',
-        'billing_mode' => 'form',
-        'is_recur' => 0,
-        'is_reserved' => 1,
-        'is_active' => 1,
-      ];
-    }
-    $result = $this->callAPISuccess('payment_processor_type', 'create', $params);
+  public function paymentProcessorTypeCreate($params = []) {
+    $params = array_merge([
+      'name' => 'API_Test_PP',
+      'title' => 'API Test Payment Processor',
+      'class_name' => 'CRM_Core_Payment_APITest',
+      'billing_mode' => 'form',
+      'is_recur' => 0,
+      'is_reserved' => 1,
+      'is_active' => 1,
+    ], $params);
+    $result = $this->callAPISuccess('PaymentProcessorType', 'create', $params);
 
     CRM_Core_PseudoConstant::flush('paymentProcessorType');
 
@@ -728,6 +758,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
    * @param array $params
    *
    * @return mixed
+   * @throws \CRM_Core_Exception
    */
   public function paymentProcessorAuthorizeNetCreate($params = []) {
     $params = array_merge([
@@ -748,7 +779,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     ], $params);
 
     $result = $this->callAPISuccess('PaymentProcessor', 'create', $params);
-    return $result['id'];
+    return (int) $result['id'];
   }
 
   /**
@@ -1197,7 +1228,7 @@ class CiviUnitTestCase extends PHPUnit\Framework\TestCase {
     // clear getfields cache
     CRM_Core_PseudoConstant::flush();
     $this->callAPISuccess('phone', 'getfields', ['version' => 3, 'cache_clear' => 1]);
-    return $locationType;
+    return $locationType->id;
   }
 
   /**
@@ -2471,6 +2502,7 @@ VALUES
    * @throws \CRM_Core_Exception
    */
   public function setupRecurringPaymentProcessorTransaction($recurParams = [], $contributionParams = []) {
+    $this->ids['campaign'][0] = $this->callAPISuccess('Campaign', 'create', ['title' => 'get the money'])['id'];
     $contributionParams = array_merge([
       'total_amount' => '200',
       'invoice_id' => $this->_invoiceID,
@@ -2482,6 +2514,9 @@ VALUES
       'is_test' => 0,
       'receive_date' => '2019-07-25 07:34:23',
       'skipCleanMoney' => TRUE,
+      'amount_level' => 'expensive',
+      'campaign_id' => $this->ids['campaign'][0],
+      'source' => 'Online Contribution: Page name',
     ], $contributionParams);
     $contributionRecur = $this->callAPISuccess('contribution_recur', 'create', array_merge([
       'contact_id' => $this->_contactID,
@@ -3055,21 +3090,24 @@ VALUES
   }
 
   /**
-   * Add Sales Tax relation for financial type with financial account.
+   * Add Sales Tax Account for the financial type.
    *
    * @param int $financialTypeId
    *
-   * @return obj
+   * @param array $accountParams
+   *
+   * @return CRM_Financial_DAO_EntityFinancialAccount
+   * @throws \CRM_Core_Exception
    */
-  protected function relationForFinancialTypeWithFinancialAccount($financialTypeId) {
-    $params = [
+  protected function addTaxAccountToFinancialType(int $financialTypeId, $accountParams = []) {
+    $params = array_merge([
       'name' => 'Sales tax account ' . substr(sha1(rand()), 0, 4),
       'financial_account_type_id' => key(CRM_Core_PseudoConstant::accountOptionValues('financial_account_type', NULL, " AND v.name LIKE 'Liability' ")),
       'is_deductible' => 1,
       'is_tax' => 1,
       'tax_rate' => 10,
       'is_active' => 1,
-    ];
+    ], $accountParams);
     $account = CRM_Financial_BAO_FinancialAccount::add($params);
     $entityParams = [
       'entity_table' => 'civicrm_financial_type',
@@ -3078,7 +3116,7 @@ VALUES
     ];
 
     // set tax rate (as 10) for provided financial type ID to static variable, later used to fetch tax rates of all financial types
-    \Civi::$statics['CRM_Core_PseudoConstant']['taxRates'][$financialTypeId] = 10;
+    \Civi::$statics['CRM_Core_PseudoConstant']['taxRates'][$financialTypeId] = $params['tax_rate'];
 
     //CRM-20313: As per unique index added in civicrm_entity_financial_account table,
     //  first check if there's any record on basis of unique key (entity_table, account_relationship, entity_id)
@@ -3235,6 +3273,7 @@ VALUES
    */
   public function getFormObject($class, $formValues = [], $pageName = '') {
     $_POST = $formValues;
+    /* @var CRM_Core_Form $form */
     $form = new $class();
     $_SERVER['REQUEST_METHOD'] = 'GET';
     switch ($class) {
@@ -3247,8 +3286,7 @@ VALUES
         $form->controller = new CRM_Core_Controller();
     }
     if (!$pageName) {
-      $formParts = explode('_', $class);
-      $pageName = array_pop($formParts);
+      $pageName = $form->getName();
     }
     $form->controller->setStateMachine(new CRM_Core_StateMachine($form->controller));
     $_SESSION['_' . $form->controller->_name . '_container']['values'][$pageName] = $formValues;
@@ -3549,13 +3587,16 @@ VALUES
    * @throws \CRM_Core_Exception
    */
   protected function validateAllContributions() {
-    $contributions = $this->callAPISuccess('Contribution', 'get', [])['values'];
+    $contributions = $this->callAPISuccess('Contribution', 'get', ['return' => ['tax_amount', 'total_amount']])['values'];
     foreach ($contributions as $contribution) {
       $lineItems = $this->callAPISuccess('LineItem', 'get', ['contribution_id' => $contribution['id']])['values'];
       $total = 0;
+      $taxTotal = 0;
       foreach ($lineItems as $lineItem) {
         $total += $lineItem['line_total'];
+        $taxTotal += (float) ($lineItem['tax_amount'] ?? 0);
       }
+      $this->assertEquals($taxTotal, (float) ($contribution['tax_amount'] ?? 0));
       $this->assertEquals($total, $contribution['total_amount']);
     }
   }
@@ -3636,8 +3677,117 @@ VALUES
       'activity_details' => '',
     ];
     $form = new CRM_Case_Form_Case();
-    $caseObj = $form->testSubmit($caseParams, "OpenCase", $loggedInUser, "standalone");
-    return $caseObj;
+    return $form->testSubmit($caseParams, 'OpenCase', $loggedInUser, 'standalone');
+  }
+
+  /**
+   * Validate that all location entities have exactly one primary.
+   *
+   * This query takes about 2 minutes on a DB with 10s of millions of contacts.
+   */
+  public function assertLocationValidity() {
+    $this->assertEquals(0, CRM_Core_DAO::singleValueQuery('SELECT COUNT(*) FROM
+
+(SELECT a1.contact_id
+FROM civicrm_address a1
+  LEFT JOIN civicrm_address a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+  a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_address a1
+       LEFT JOIN civicrm_address a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_email a1
+       LEFT JOIN civicrm_email a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_email a1
+       LEFT JOIN civicrm_email a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_phone a1
+       LEFT JOIN civicrm_phone a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_phone a1
+       LEFT JOIN civicrm_phone a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_im a1
+       LEFT JOIN civicrm_im a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_im a1
+       LEFT JOIN civicrm_im a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL
+
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_openid a1
+       LEFT JOIN civicrm_openid a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE (a1.is_primary = 1 AND a2.id IS NOT NULL)
+UNION
+
+SELECT a1.contact_id
+FROM civicrm_openid a1
+       LEFT JOIN civicrm_openid a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE
+    a1.is_primary = 1
+  AND a2.id IS NOT NULL
+  AND a1.contact_id IS NOT NULL
+UNION
+SELECT a1.contact_id
+FROM civicrm_openid a1
+       LEFT JOIN civicrm_openid a2 ON a1.id <> a2.id AND a2.is_primary = 1
+  AND a1.contact_id = a2.contact_id
+WHERE a1.is_primary = 0
+  AND a2.id IS NULL
+  AND a1.contact_id IS NOT NULL) as primary_descrepancies
+    '));
   }
 
 }

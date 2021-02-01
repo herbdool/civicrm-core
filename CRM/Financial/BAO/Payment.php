@@ -61,10 +61,6 @@ class CRM_Financial_BAO_Payment {
         $paymentTrxnParams['payment_instrument_id'] = $contribution['payment_instrument_id'];
       }
     }
-    if (empty($paymentTrxnParams['trxn_id']) && !empty($paymentTrxnParams['contribution_trxn_id'])) {
-      CRM_Core_Error::deprecatedFunctionWarning('contribution_trxn_id is deprecated - use trxn_id');
-      $paymentTrxnParams['trxn_id'] = $paymentTrxnParams['contribution_trxn_id'];
-    }
 
     $paymentTrxnParams['currency'] = $contribution['currency'];
 
@@ -98,44 +94,45 @@ class CRM_Financial_BAO_Payment {
 
     if ($params['total_amount'] < 0 && !empty($params['cancelled_payment_id'])) {
       self::reverseAllocationsFromPreviousPayment($params, $trxn->id);
-      return $trxn;
     }
-    list($ftIds, $taxItems) = CRM_Contribute_BAO_Contribution::getLastFinancialItemIds($params['contribution_id']);
+    else {
+      list($ftIds, $taxItems) = CRM_Contribute_BAO_Contribution::getLastFinancialItemIds($params['contribution_id']);
 
-    foreach ($lineItems as $key => $value) {
-      if ($value['allocation'] === (float) 0) {
-        continue;
-      }
+      foreach ($lineItems as $key => $value) {
+        if ($value['allocation'] === (float) 0) {
+          continue;
+        }
 
-      if (!empty($ftIds[$value['price_field_value_id']])) {
-        $financialItemID = $ftIds[$value['price_field_value_id']];
-      }
-      else {
-        $financialItemID = self::getNewFinancialItemID($value, $params['trxn_date'], $contribution['contact_id'], $paymentTrxnParams['currency']);
-      }
+        if (!empty($ftIds[$value['price_field_value_id']])) {
+          $financialItemID = $ftIds[$value['price_field_value_id']];
+        }
+        else {
+          $financialItemID = self::getNewFinancialItemID($value, $params['trxn_date'], $contribution['contact_id'], $paymentTrxnParams['currency']);
+        }
 
-      $eftParams = [
-        'entity_table' => 'civicrm_financial_item',
-        'financial_trxn_id' => $trxn->id,
-        'entity_id' => $financialItemID,
-        'amount' => $value['allocation'],
-      ];
-
-      civicrm_api3('EntityFinancialTrxn', 'create', $eftParams);
-
-      if (array_key_exists($value['price_field_value_id'], $taxItems)) {
-        // @todo - this is expected to be broken - it should be fixed to
-        // a) have the getPayableLineItems add the amount to allocate for tax
-        // b) call EntityFinancialTrxn directly - per above.
-        // - see https://github.com/civicrm/civicrm-core/pull/14763
-        $entityParams = [
-          'contribution_total_amount' => $contribution['total_amount'],
-          'trxn_total_amount' => $params['total_amount'],
-          'trxn_id' => $trxn->id,
-          'line_item_amount' => $taxItems[$value['price_field_value_id']]['amount'],
+        $eftParams = [
+          'entity_table' => 'civicrm_financial_item',
+          'financial_trxn_id' => $trxn->id,
+          'entity_id' => $financialItemID,
+          'amount' => $value['allocation'],
         ];
-        $eftParams['entity_id'] = $taxItems[$value['price_field_value_id']]['financial_item_id'];
-        CRM_Contribute_BAO_Contribution::createProportionalEntry($entityParams, $eftParams);
+
+        civicrm_api3('EntityFinancialTrxn', 'create', $eftParams);
+
+        if (array_key_exists($value['price_field_value_id'], $taxItems)) {
+          // @todo - this is expected to be broken - it should be fixed to
+          // a) have the getPayableLineItems add the amount to allocate for tax
+          // b) call EntityFinancialTrxn directly - per above.
+          // - see https://github.com/civicrm/civicrm-core/pull/14763
+          $entityParams = [
+            'contribution_total_amount' => $contribution['total_amount'],
+            'trxn_total_amount' => $params['total_amount'],
+            'trxn_id' => $trxn->id,
+            'line_item_amount' => $taxItems[$value['price_field_value_id']]['amount'],
+          ];
+          $eftParams['entity_id'] = $taxItems[$value['price_field_value_id']]['financial_item_id'];
+          CRM_Contribute_BAO_Contribution::createProportionalEntry($entityParams, $eftParams);
+        }
       }
     }
 
@@ -157,6 +154,8 @@ class CRM_Financial_BAO_Payment {
           'is_post_payment_create' => TRUE,
           'is_email_receipt' => $params['is_send_contribution_notification'],
           'trxn_date' => $params['trxn_date'],
+          'payment_instrument_id' => $paymentTrxnParams['payment_instrument_id'],
+          'payment_processor_id' => $paymentTrxnParams['payment_processor_id'] ?? NULL,
         ]);
         // Get the trxn
         $trxnId = CRM_Core_BAO_FinancialTrxn::getFinancialTrxnId($contribution['id'], 'DESC');
@@ -486,6 +485,9 @@ class CRM_Financial_BAO_Payment {
     if ($outstandingBalance !== 0.0) {
       $ratio = $params['total_amount'] / $outstandingBalance;
     }
+    elseif ($params['total_amount'] < 0) {
+      $ratio = $params['total_amount'] / (float) CRM_Core_BAO_FinancialTrxn::getTotalPayments($params['contribution_id'], TRUE);
+    }
     else {
       // Help we are making a payment but no money is owed. We won't allocate the overpayment to any line item.
       $ratio = 0;
@@ -495,12 +497,16 @@ class CRM_Financial_BAO_Payment {
       $lineItems[$lineItemID]['id'] = $lineItemID;
       $lineItems[$lineItemID]['paid'] = self::getAmountOfLineItemPaid($lineItemID);
       $lineItems[$lineItemID]['balance'] = $lineItem['subTotal'] - $lineItems[$lineItemID]['paid'];
-
       if (!empty($lineItemOverrides)) {
         $lineItems[$lineItemID]['allocation'] = $lineItemOverrides[$lineItemID] ?? NULL;
       }
       else {
-        $lineItems[$lineItemID]['allocation'] = $lineItems[$lineItemID]['balance'] * $ratio;
+        if (empty($lineItems[$lineItemID]['balance']) && !empty($ratio) && $params['total_amount'] < 0) {
+          $lineItems[$lineItemID]['allocation'] = $lineItem['subTotal'] * $ratio;
+        }
+        else {
+          $lineItems[$lineItemID]['allocation'] = $lineItems[$lineItemID]['balance'] * $ratio;
+        }
       }
     }
     return $lineItems;

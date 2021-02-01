@@ -238,7 +238,7 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
       }
 
       $params = [['contact_id', '=', $contactId, 0, 0]];
-      list($contact, $_) = CRM_Contact_BAO_Query::apiQuery($params);
+      [$contact] = CRM_Contact_BAO_Query::apiQuery($params);
 
       //CRM-4524
       $contact = reset($contact);
@@ -261,7 +261,7 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
           $returnProperties[$value] = 1;
         }
       }
-      list($details) = CRM_Utils_Token::getTokenDetails([$contactId],
+      [$details] = CRM_Utils_Token::getTokenDetails([$contactId],
         $returnProperties,
         NULL, NULL, FALSE,
         $tokens,
@@ -402,6 +402,8 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
       'isTest' => FALSE,
       // filename of optional PDF version to add as attachment (do not include path)
       'PDFFilename' => NULL,
+      // Disable Smarty?
+      'disableSmarty' => FALSE,
     ];
     $params = array_merge($defaults, $params);
 
@@ -411,71 +413,36 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
     }
 
     CRM_Utils_Hook::alterMailParams($params, 'messageTemplate');
-
-    if (!$params['valueName'] && !$params['messageTemplateID']) {
-      throw new CRM_Core_Exception(ts("Message template's option value or ID missing."));
+    if (!is_int($params['messageTemplateID']) && !is_null($params['messageTemplateID'])) {
+      CRM_Core_Error::deprecatedWarning('message template id should be an integer');
+      $params['messageTemplateID'] = (int) $params['messageTemplateID'];
     }
+    $mailContent = self::loadTemplate((string) $params['valueName'], $params['isTest'], $params['messageTemplateID'] ?? NULL, $params['groupName'] ?? '');
 
-    $apiCall = MessageTemplate::get(FALSE)
-      ->addSelect('msg_subject', 'msg_text', 'msg_html', 'pdf_format_id', 'id')
-      ->addWhere('is_default', '=', 1);
-
-    if ($params['messageTemplateID']) {
-      $apiCall->addWhere('id', '=', (int) $params['messageTemplateID']);
-    }
-    else {
-      $apiCall->addWhere('workflow_name', '=', $params['valueName']);
-    }
-    $messageTemplate = $apiCall->execute()->first();
-
-    if (empty($messageTemplate['id'])) {
-      if ($params['messageTemplateID']) {
-        throw new CRM_Core_Exception(ts('No such message template: id=%1.', [1 => $params['messageTemplateID']]));
-      }
-      throw new CRM_Core_Exception(ts('No message template with workflow name %2.', [2 => $params['valueName']]));
-    }
-
-    $mailContent = [
-      'subject' => $messageTemplate['msg_subject'],
-      'text' => $messageTemplate['msg_text'],
-      'html' => $messageTemplate['msg_html'],
-      'format' => $messageTemplate['pdf_format_id'],
-      // Group name is a deprecated parameter. At some point it will not be passed out.
-      // https://github.com/civicrm/civicrm-core/pull/17180
-      'groupName' => $params['groupName'] ?? NULL,
-      'valueName' => $params['valueName'],
-      'messageTemplateID' => $params['messageTemplateID'],
-    ];
-
-    CRM_Utils_Hook::alterMailContent($mailContent);
-
-    // add the test banner (if requested)
-    if ($params['isTest']) {
-      $query = "SELECT msg_subject subject, msg_text text, msg_html html
-                      FROM civicrm_msg_template mt
-                      WHERE workflow_name = 'test_preview' AND mt.is_default = 1";
-      $testDao = CRM_Core_DAO::executeQuery($query);
-      $testDao->fetch();
-
-      $mailContent['subject'] = $testDao->subject . $mailContent['subject'];
-      $mailContent['text'] = $testDao->text . $mailContent['text'];
-      $mailContent['html'] = preg_replace('/<body(.*)$/im', "<body\\1\n{$testDao->html}", $mailContent['html']);
+    // Overwrite subject from form field
+    if (!empty($params['subject'])) {
+      $mailContent['subject'] = $params['subject'];
     }
 
     // replace tokens in the three elements (in subject as if it was the text body)
     $domain = CRM_Core_BAO_Domain::getDomain();
-    $hookTokens = [];
+
     $mailing = new CRM_Mailing_BAO_Mailing();
     $mailing->subject = $mailContent['subject'];
     $mailing->body_text = $mailContent['text'];
     $mailing->body_html = $mailContent['html'];
     $tokens = $mailing->getTokens();
-    CRM_Utils_Hook::tokens($hookTokens);
-    $categories = array_keys($hookTokens);
+
+    // When using Smarty we need to pass the $escapeSmarty parameter.
+    $escapeSmarty = !$params['disableSmarty'];
+
+    $mailContent['subject'] = CRM_Utils_Token::replaceDomainTokens($mailContent['subject'], $domain, FALSE, $tokens['subject'], $escapeSmarty);
+    $mailContent['text'] = CRM_Utils_Token::replaceDomainTokens($mailContent['text'], $domain, FALSE, $tokens['text'], $escapeSmarty);
+    $mailContent['html'] = CRM_Utils_Token::replaceDomainTokens($mailContent['html'], $domain, TRUE, $tokens['html'], $escapeSmarty);
 
     $contactID = $params['contactId'] ?? NULL;
-
     if ($contactID) {
+
       $contactParams = ['contact_id' => $contactID];
       $returnProperties = [];
 
@@ -501,7 +468,7 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
       // effectively comment out this next (performance-expensive) line
       // but unfortunately testing is a bit think on the ground to that needs to
       // be added.
-      list($contact) = CRM_Utils_Token::getTokenDetails($contactParams,
+      [$contact] = CRM_Utils_Token::getTokenDetails($contactParams,
         $returnProperties,
         FALSE, FALSE, NULL,
         CRM_Utils_Token::flattenTokens($tokens),
@@ -509,16 +476,9 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
         'CRM_Core_BAO_MessageTemplate'
       );
       $contact = $contact[$contactID];
-    }
-
-    $mailContent['subject'] = CRM_Utils_Token::replaceDomainTokens($mailContent['subject'], $domain, FALSE, $tokens['subject'], TRUE);
-    $mailContent['text'] = CRM_Utils_Token::replaceDomainTokens($mailContent['text'], $domain, FALSE, $tokens['text'], TRUE);
-    $mailContent['html'] = CRM_Utils_Token::replaceDomainTokens($mailContent['html'], $domain, TRUE, $tokens['html'], TRUE);
-
-    if ($contactID) {
-      $mailContent['subject'] = CRM_Utils_Token::replaceContactTokens($mailContent['subject'], $contact, FALSE, $tokens['subject'], FALSE, TRUE);
-      $mailContent['text'] = CRM_Utils_Token::replaceContactTokens($mailContent['text'], $contact, FALSE, $tokens['text'], FALSE, TRUE);
-      $mailContent['html'] = CRM_Utils_Token::replaceContactTokens($mailContent['html'], $contact, FALSE, $tokens['html'], FALSE, TRUE);
+      $mailContent['subject'] = CRM_Utils_Token::replaceContactTokens($mailContent['subject'], $contact, FALSE, $tokens['subject'], FALSE, $escapeSmarty);
+      $mailContent['text'] = CRM_Utils_Token::replaceContactTokens($mailContent['text'], $contact, FALSE, $tokens['text'], FALSE, $escapeSmarty);
+      $mailContent['html'] = CRM_Utils_Token::replaceContactTokens($mailContent['html'], $contact, FALSE, $tokens['html'], FALSE, $escapeSmarty);
 
       $contactArray = [$contactID => $contact];
       CRM_Utils_Hook::tokenValues($contactArray,
@@ -530,25 +490,38 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
       );
       $contact = $contactArray[$contactID];
 
+      $hookTokens = [];
+      CRM_Utils_Hook::tokens($hookTokens);
+      $categories = array_keys($hookTokens);
       $mailContent['subject'] = CRM_Utils_Token::replaceHookTokens($mailContent['subject'], $contact, $categories, TRUE);
       $mailContent['text'] = CRM_Utils_Token::replaceHookTokens($mailContent['text'], $contact, $categories, TRUE);
       $mailContent['html'] = CRM_Utils_Token::replaceHookTokens($mailContent['html'], $contact, $categories, TRUE);
     }
 
-    // strip whitespace from ends and turn into a single line
-    $mailContent['subject'] = "{strip}{$mailContent['subject']}{/strip}";
+    // Normally Smarty is run, but it can be disabled using the disableSmarty
+    // parameter, which may be useful for non-core uses of MessageTemplate.send
+    // In particular it helps with the mosaicomsgtpl extension.
+    if (!$params['disableSmarty']) {
+      // strip whitespace from ends and turn into a single line
+      $mailContent['subject'] = "{strip}{$mailContent['subject']}{/strip}";
 
-    // parse the three elements with Smarty
-    $smarty = CRM_Core_Smarty::singleton();
-    foreach ($params['tplParams'] as $name => $value) {
-      $smarty->assign($name, $value);
+      // parse the three elements with Smarty
+      $smarty = CRM_Core_Smarty::singleton();
+      foreach ($params['tplParams'] as $name => $value) {
+        $smarty->assign($name, $value);
+      }
+      foreach ([
+        'subject',
+        'text',
+        'html',
+      ] as $elem) {
+        $mailContent[$elem] = $smarty->fetch("string:{$mailContent[$elem]}");
+      }
     }
-    foreach ([
-      'subject',
-      'text',
-      'html',
-    ] as $elem) {
-      $mailContent[$elem] = $smarty->fetch("string:{$mailContent[$elem]}");
+    else {
+      // Since we're not relying on Smarty for this function, we DIY.
+      // strip whitespace from ends and turn into a single line
+      $mailContent['subject'] = trim(preg_replace('/[\r\n]+/', ' ', $mailContent['subject']));
     }
 
     // send the template, honouring the target user’s preferences (if any)
@@ -561,7 +534,7 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
 
     if ($params['toEmail']) {
       $contactParams = [['email', 'LIKE', $params['toEmail'], 0, 1]];
-      list($contact, $_) = CRM_Contact_BAO_Query::apiQuery($contactParams);
+      [$contact] = CRM_Contact_BAO_Query::apiQuery($contactParams);
 
       $prefs = array_pop($contact);
 
@@ -617,6 +590,78 @@ class CRM_Core_BAO_MessageTemplate extends CRM_Core_DAO_MessageTemplate {
     return CRM_Core_DAO::executeQuery('SELECT cov.name as name, cov.id as id FROM civicrm_option_group cog INNER JOIN civicrm_option_value cov on cov.option_group_id=cog.id WHERE cog.name LIKE %1', [
       1 => ['msg_tpl_workflow_%', 'String'],
     ])->fetchMap('name', 'id');
+  }
+
+  /**
+   * Load the specified template.
+   *
+   * @param string $workflowName
+   * @param bool $isTest
+   * @param int|null $messageTemplateID
+   * @param string $groupName
+   *
+   * @return array
+   * @throws \API_Exception
+   * @throws \CRM_Core_Exception
+   */
+  protected static function loadTemplate(string $workflowName, bool $isTest, int $messageTemplateID = NULL, $groupName = NULL): array {
+    if (!$workflowName && !$messageTemplateID) {
+      throw new CRM_Core_Exception(ts("Message template's option value or ID missing."));
+    }
+
+    $apiCall = MessageTemplate::get(FALSE)
+      ->addSelect('msg_subject', 'msg_text', 'msg_html', 'pdf_format_id', 'id')
+      ->addWhere('is_default', '=', 1);
+
+    if ($messageTemplateID) {
+      $apiCall->addWhere('id', '=', (int) $messageTemplateID);
+    }
+    else {
+      $apiCall->addWhere('workflow_name', '=', $workflowName);
+    }
+    $messageTemplate = $apiCall->execute()->first();
+    if (empty($messageTemplate['id'])) {
+      if ($messageTemplateID) {
+        throw new CRM_Core_Exception(ts('No such message template: id=%1.', [1 => $messageTemplateID]));
+      }
+      throw new CRM_Core_Exception(ts('No message template with workflow name %2.', [2 => $workflowName]));
+    }
+
+    $mailContent = [
+      'subject' => $messageTemplate['msg_subject'],
+      'text' => $messageTemplate['msg_text'],
+      'html' => $messageTemplate['msg_html'],
+      'format' => $messageTemplate['pdf_format_id'],
+      // Workflow name is the field in the message templates table that denotes the
+      // workflow the template is used for. This is intended to eventually
+      // replace the non-standard option value/group implementation - see
+      // https://github.com/civicrm/civicrm-core/pull/17227 and the longer
+      // discussion on https://github.com/civicrm/civicrm-core/pull/17180
+      'workflow_name' => $workflowName,
+      // Note messageTemplateID is the id but when present we also know it was specifically requested.
+      'messageTemplateID' => $messageTemplateID,
+      // Group name & valueName are deprecated parameters. At some point it will not be passed out.
+      // https://github.com/civicrm/civicrm-core/pull/17180
+      'groupName' => $groupName,
+      'valueName' => $workflowName,
+    ];
+
+    CRM_Utils_Hook::alterMailContent($mailContent);
+
+    // add the test banner (if requested)
+    if ($isTest) {
+      $testText = MessageTemplate::get(FALSE)
+        ->setSelect(['msg_subject', 'msg_text', 'msg_html'])
+        ->addWhere('workflow_name', '=', 'test_preview')
+        ->addWhere('is_default', '=', TRUE)
+        ->execute()->first();
+
+      $mailContent['subject'] = $testText['msg_subject'] . $mailContent['subject'];
+      $mailContent['text'] = $testText['msg_text'] . $mailContent['text'];
+      $mailContent['html'] = preg_replace('/<body(.*)$/im', "<body\\1\n{$testText['msg_html']}", $mailContent['html']);
+    }
+
+    return $mailContent;
   }
 
 }

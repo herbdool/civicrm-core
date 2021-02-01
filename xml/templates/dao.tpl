@@ -15,6 +15,7 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
 
      const EXT = {$ext};
      const TABLE_ADDED = '{$table.add}';
+     {if !empty($table.component)}const COMPONENT = '{$table.component}';{/if}
 
      /**
       * Static instance to hold the table name.
@@ -37,6 +38,14 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
        * @var bool
        */
       public static $_log = {$table.log|strtoupper};
+      {if $table.paths}
+     /**
+      * Paths for accessing this entity in the UI.
+      *
+      * @var string[]
+      */
+      protected static $_paths = {$table.paths|@print_array};
+   {/if}
 
 {foreach from=$table.fields item=field}
     /**
@@ -61,9 +70,12 @@ class {$table.className} extends CRM_Core_DAO {ldelim}
 
     /**
      * Returns localized title of this entity.
+     *
+     * @param bool $plural
+     *   Whether to return the plural version of the title.
      */
-    public static function getEntityTitle() {ldelim}
-        return {$tsFunctionName}('{$table.title}');
+    public static function getEntityTitle($plural = FALSE) {ldelim}
+        return $plural ? {$tsFunctionName}('{$table.titlePlural}') : {$tsFunctionName}('{$table.title}');
     {rdelim}
 
 

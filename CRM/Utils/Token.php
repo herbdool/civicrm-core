@@ -224,9 +224,9 @@ class CRM_Utils_Token {
    * @return string
    *   The processed string
    */
-  public static function &replaceDomainTokens(
+  public static function replaceDomainTokens(
     $str,
-    &$domain,
+    $domain,
     $html = FALSE,
     $knownTokens = NULL,
     $escapeSmarty = FALSE
@@ -240,7 +240,7 @@ class CRM_Utils_Token {
 
     $str = preg_replace_callback(
       self::tokenRegex($key),
-      function ($matches) use (&$domain, $html, $escapeSmarty) {
+      function ($matches) use ($domain, $html, $escapeSmarty) {
         return CRM_Utils_Token::getDomainTokenReplacement($matches[1], $domain, $html, $escapeSmarty);
       },
       $str
@@ -256,7 +256,7 @@ class CRM_Utils_Token {
    *
    * @return mixed|null|string
    */
-  public static function getDomainTokenReplacement($token, &$domain, $html = FALSE, $escapeSmarty = FALSE) {
+  public static function getDomainTokenReplacement($token, $domain, $html = FALSE, $escapeSmarty = FALSE) {
     // check if the token we were passed is valid
     // we have to do this because this function is
     // called only when we find a token in the string
@@ -644,7 +644,7 @@ class CRM_Utils_Token {
    * @return string
    *   The processed string
    */
-  public static function &replaceContactTokens(
+  public static function replaceContactTokens(
     $str,
     &$contact,
     $html = FALSE,
@@ -1160,11 +1160,11 @@ class CRM_Utils_Token {
    *   Extra params.
    * @param array $tokens
    *   The list of tokens we've extracted from the content.
-   * @param null $className
-   * @param int $jobID
+   * @param string|null $className
+   * @param int|null $jobID
    *   The mailing list jobID - this is a legacy param.
    *
-   * @return array
+   * @return array - e.g [[1 => ['first_name' => 'bob'...], 34 => ['first_name' => 'fred'...]]]
    */
   public static function getTokenDetails(
     $contactIDs,
@@ -1227,8 +1227,7 @@ class CRM_Utils_Token {
       }
     }
 
-    $details = CRM_Contact_BAO_Query::apiQuery($params, $returnProperties, NULL, NULL, 0, count($contactIDs), TRUE, FALSE, TRUE, CRM_Contact_BAO_Query::MODE_CONTACTS, NULL, TRUE);
-    $contactDetails = &$details[0];
+    [$contactDetails] = CRM_Contact_BAO_Query::apiQuery($params, $returnProperties, NULL, NULL, 0, count($contactIDs), TRUE, FALSE, TRUE, CRM_Contact_BAO_Query::MODE_CONTACTS, NULL, TRUE);
 
     foreach ($contactIDs as $contactID) {
       if (array_key_exists($contactID, $contactDetails)) {
@@ -1270,7 +1269,7 @@ class CRM_Utils_Token {
       $tokens,
       $className
     );
-    return $details;
+    return [$contactDetails];
   }
 
   /**
@@ -1802,7 +1801,10 @@ class CRM_Utils_Token {
       case 'net_amount':
       case 'fee_amount':
       case 'non_deductible_amount':
-        $value = CRM_Utils_Money::format(CRM_Utils_Array::retrieveValueRecursive($contribution, $token));
+        // FIXME: Is this ever a multi-dimensional array?  Why use retrieveValueRecursive()?
+        $amount = CRM_Utils_Array::retrieveValueRecursive($contribution, $token);
+        $currency = CRM_Utils_Array::retrieveValueRecursive($contribution, 'currency');
+        $value = CRM_Utils_Money::format($amount, $currency);
         break;
 
       case 'receive_date':

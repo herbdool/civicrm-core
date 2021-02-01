@@ -280,7 +280,7 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
       'onchange' => "return showHideByValue('price_set_id', '', 'map-field', 'block', 'select', false);",
     ]);
 
-    $default = [$this->createElement('radio', NULL, NULL, NULL, 0)];
+    $default = [0 => NULL];
     $this->add('hidden', 'price_field_id', '', ['id' => 'price_field_id']);
     for ($i = 1; $i <= self::NUM_OPTION; $i++) {
       // label
@@ -292,10 +292,10 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
       $this->addRule("value[$i]", ts('Please enter a valid money value for this field (e.g. %1).', [1 => CRM_Utils_Money::formatLocaleNumericRoundedForDefaultCurrency('99.99')]), 'money');
 
       // default
-      $default[] = $this->createElement('radio', NULL, NULL, NULL, $i);
+      $default[$i] = NULL;
     }
 
-    $this->addGroup($default, 'default');
+    $this->addRadio('default', '', $default);
 
     $this->addElement('checkbox', 'is_discount', ts('Discounts by Signup Date?'), NULL,
       ['onclick' => "warnDiscountDel(); return showHideByValue('is_discount','','discount','block','radio',false);"]
@@ -355,8 +355,12 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
       $this->add('datepicker', 'discount_end_date[' . $i . ']', ts('Discount End Date'), [], FALSE, ['time' => FALSE]);
     }
     $_showHide->addToTemplate();
-    $this->addElement('submit', $this->getButtonName('submit'), ts('Add Discount Set to Fee Table'),
-      ['class' => 'crm-form-submit cancel']
+    $this->addElement('xbutton', $this->getButtonName('submit'), ts('Add Discount Set to Fee Table'),
+      [
+        'type' => 'submit',
+        'class' => 'crm-form-submit cancel',
+        'value' => 1,
+      ]
     );
     if (Civi::settings()->get('deferred_revenue_enabled')) {
       $deferredFinancialType = CRM_Financial_BAO_FinancialAccount::getDeferredFinancialType();
@@ -519,10 +523,10 @@ class CRM_Event_Form_ManageEvent_Fee extends CRM_Event_Form_ManageEvent {
       }
 
       // default
-      $default[] = $this->createElement('radio', NULL, NULL, NULL, $i);
+      $default[$i] = NULL;
     }
 
-    $this->addGroup($default, 'discounted_default');
+    $this->addRadio('discounted_default', NULL, $default);
   }
 
   /**

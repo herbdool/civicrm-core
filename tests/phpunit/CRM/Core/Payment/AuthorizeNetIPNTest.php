@@ -1,6 +1,7 @@
 <?php
 
 use Civi\Payment\Exception\PaymentProcessorException;
+use Civi\Api4\Contribution;
 
 /**
  * Class CRM_Core_Payment_PayPalProIPNTest
@@ -135,6 +136,11 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
     $this->assertEquals(date('Y-m-d'), substr($updatedContributionRecurAgain['end_date'], 0, 10));
     // There should not be any email.
     $mut->assertMailLogEmpty();
+
+    $contributions = Contribution::get()->addWhere('contribution_recur_id', '=', $this->_contributionRecurID)->addSelect('contribution_page_id')->execute();
+    foreach ($contributions as $contribution) {
+      $this->assertEquals($this->_contributionPageID, $contribution['contribution_page_id']);
+    }
   }
 
   /**
@@ -158,10 +164,13 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
     $contribution = $this->callAPISuccess('contribution', 'get', [
       'contribution_recur_id' => $this->_contributionRecurID,
       'sequential' => 1,
-    ]);
-    $this->assertEquals(2, $contribution['count']);
-    $this->assertEquals('second_one', $contribution['values'][1]['trxn_id']);
-    $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($contribution['values'][1]['receive_date'])));
+    ])['values'];
+    $this->assertCount(2, $contribution);
+    $secondContribution = $contribution[1];
+    $this->assertEquals('second_one', $secondContribution['trxn_id']);
+    $this->assertEquals(date('Y-m-d'), date('Y-m-d', strtotime($secondContribution['receive_date'])));
+    $this->assertEquals('expensive', $secondContribution['amount_level']);
+    $this->assertEquals($this->ids['campaign'][0], $secondContribution['campaign_id']);
   }
 
   /**
@@ -212,11 +221,13 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
   }
 
   /**
-   * Test IPN response updates contribution_recur & contribution for first & second contribution
+   * Test IPN response updates contribution_recur & contribution for first &
+   * second contribution
    *
    * @throws \CRM_Core_Exception
+   * @throws \CiviCRM_API3_Exception
    */
-  public function testIPNPaymentMembershipRecurSuccess() {
+  public function testIPNPaymentMembershipRecurSuccess(): void {
     $this->createRepeatMembershipOrder();
     $IPN = new CRM_Core_Payment_AuthorizeNetIPN($this->getRecurTransaction());
     $IPN->main();
@@ -251,7 +262,7 @@ class CRM_Core_Payment_AuthorizeNetIPNTest extends CiviUnitTestCase {
   /**
    * Test IPN response mails don't leak.
    *
-   * @throws \CRM_Core_Exception
+   * @throws \CRM_Core_Exception|\CiviCRM_API3_Exception
    */
   public function testIPNPaymentMembershipRecurSuccessNoLeakage() {
     $mut = new CiviMailUtils($this, TRUE);

@@ -69,13 +69,13 @@ class CRM_Contribute_Form_Task_InvoiceTest extends CiviUnitTestCase {
 
     $this->assertNotContains('Due Date', $invoiceHTML[$result['id']]);
     $this->assertNotContains('PAYMENT ADVICE', $invoiceHTML[$result['id']]);
+    $this->assertContains('Mr. Anthony Anderson II', $invoiceHTML[$result['id']]);
 
     $this->assertContains('Due Date', $invoiceHTML[$contribution['id']]);
     $this->assertContains('PAYMENT ADVICE', $invoiceHTML[$contribution['id']]);
 
     $this->assertContains('AMOUNT DUE:</font></b></td>
-                  <td style="text-align:right;"><b><font size="1">$ 92.00</font></b></td>', $invoiceHTML[$contribution3['id']]);
-
+                <td style="text-align:right;"><b><font size="1">$ 92.00</font></b></td>', $invoiceHTML[$contribution3['id']]);
   }
 
   /**
@@ -158,6 +158,45 @@ class CRM_Contribute_Form_Task_InvoiceTest extends CiviUnitTestCase {
     $totalAmount = $this->formatMoneyInput($order['values'][$order['id']]['total_amount']);
     $this->assertContains("TOTAL USD</font></b></td>
                 <td style=\"text-align:right;\"><font size=\"1\">$ $totalAmount</font>", $invoiceHTML);
+
+  }
+
+  /**
+   * Test invoices if payment is made with different currency.
+   *
+   * https://lab.civicrm.org/dev/core/issues/2269
+   *
+   * @throws \CRM_Core_Exception
+   */
+  public function testThatInvoiceShowTheActuallContributionCurrencyInsteadOfTheDefaultOne() {
+    $this->setDefaultCurrency('USD');
+
+    $this->_individualId = $this->individualCreate();
+
+    $contributionParams = [
+      'contact_id' => $this->_individualId,
+      'total_amount' => 100,
+      'currency' => 'GBP',
+      'financial_type_id' => 'Donation',
+      'contribution_status_id' => 1,
+    ];
+
+    $contribution = $this->callAPISuccess('Contribution', 'create', $contributionParams);
+
+    $params = [
+      'output' => 'pdf_invoice',
+      'forPage' => 1,
+    ];
+
+    $invoiceHTML = CRM_Contribute_Form_Task_Invoice::printPDF([$contribution['id']], $params, [$this->_individualId]);
+
+    $this->assertNotContains('$', $invoiceHTML);
+    $this->assertNotContains('Amount USD', $invoiceHTML);
+    $this->assertNotContains('TOTAL USD', $invoiceHTML);
+    $this->assertContains('£ 0.00', $invoiceHTML);
+    $this->assertContains('£ 100.00', $invoiceHTML);
+    $this->assertContains('Amount GBP', $invoiceHTML);
+    $this->assertContains('TOTAL GBP', $invoiceHTML);
 
   }
 

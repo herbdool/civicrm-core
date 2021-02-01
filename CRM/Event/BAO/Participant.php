@@ -191,7 +191,7 @@ class CRM_Event_BAO_Participant extends CRM_Event_DAO_Participant {
     ) {
       // Default status if not specified
       $participant->status_id = $participant->status_id ?: self::fields()['participant_status_id']['default'];
-      CRM_Activity_BAO_Activity::addActivity($participant);
+      CRM_Activity_BAO_Activity::addActivity($participant, 'Event Registration');
     }
 
     //CRM-5403
@@ -843,7 +843,7 @@ WHERE  civicrm_participant.id = {$participantId}
     if (!$participant->find()) {
       return FALSE;
     }
-    CRM_Utils_Hook::pre('delete', 'Participant', $id, CRM_Core_DAO::$_nullArray);
+    CRM_Utils_Hook::pre('delete', 'Participant', $id);
 
     $transaction = new CRM_Core_Transaction();
 
@@ -1877,7 +1877,6 @@ WHERE    civicrm_participant.contact_id = {$contactID} AND
    * Evaluate whether a participant record is eligible for self-service transfer/cancellation.  If so,
    * return additional participant/event details.
    *
-   * TODO: This function fails when the "hours until self-service" is less than zero.
    * @param int $participantId
    * @param string $url
    * @param bool $isBackOffice
@@ -1923,14 +1922,19 @@ WHERE    civicrm_participant.contact_id = {$contactID} AND
       $start_date = $dao->start;
     }
     $timenow = new Datetime();
-    if (!$isBackOffice && !empty($time_limit)) {
+    if (!$isBackOffice && isset($time_limit)) {
       $cancelHours = abs($time_limit);
       $cancelInterval = new DateInterval("PT${cancelHours}H");
       $cancelInterval->invert = $time_limit < 0 ? 1 : 0;
       $cancelDeadline = (new Datetime($start_date))->sub($cancelInterval);
       if ($timenow > $cancelDeadline) {
         $details['eligible'] = FALSE;
-        $details['ineligible_message'] = ts("Registration for this event cannot be cancelled or transferred less than %1 hours prior to the event's start time. Contact the event organizer if you have questions.", [1 => $time_limit]);
+        // Change the language of the status message based on whether the waitlist time limit is positive or negative.
+        $afterOrPrior = $time_limit <= 0 ? 'after' : 'prior to';
+        $moreOrLess = $time_limit <= 0 ? 'more' : 'fewer';
+        $details['ineligible_message'] = ts("Registration for this event cannot be cancelled or transferred %1 than %2 hours %3 the event's start time. Contact the event organizer if you have questions.",
+        [1 => $moreOrLess, 2 => $cancelHours, 3 => $afterOrPrior]);
+
       }
     }
     return $details;

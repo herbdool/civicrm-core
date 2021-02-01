@@ -17,6 +17,7 @@
 
 use Brick\Money\Money;
 use Brick\Money\Context\DefaultContext;
+use Brick\Money\Context\CustomContext;
 use Brick\Math\RoundingMode;
 
 /**
@@ -66,14 +67,15 @@ class CRM_Utils_Money {
     }
 
     if (!empty($valueFormat) && $valueFormat !== '%!i') {
-      CRM_Core_Error::deprecatedFunctionWarning('Having a Money Value format other than !%i is deprecated, please report this on the GitLab Issue https://lab.civicrm.org/dev/core/-/issues/1494 with the relevant moneyValueFormat you use.');
+      CRM_Core_Error::deprecatedWarning('Having a Money Value format other than %!i is deprecated, please report this on the GitLab Issue https://lab.civicrm.org/dev/core/-/issues/1494 with the relevant moneyValueFormat you use.');
+    }
+
+    if (!$currency) {
+      $currency = $config->defaultCurrency;
     }
 
     if ($onlyNumber) {
-      // money_format() exists only in certain PHP install (CRM-650)
-      if (is_numeric($amount) and function_exists('money_format')) {
-        $amount = money_format($valueFormat, $amount);
-      }
+      $amount = self::formatLocaleNumericRoundedByCurrency($amount, $currency);
       return $amount;
     }
 
@@ -84,14 +86,14 @@ class CRM_Utils_Money {
       ]);
     }
 
-    if (!$currency) {
-      $currency = $config->defaultCurrency;
-    }
-
     // ensure $currency is a valid currency code
     // for backwards-compatibility, also accept one space instead of a currency
     if ($currency != ' ' && !array_key_exists($currency, self::$_currencySymbols)) {
       throw new CRM_Core_Exception("Invalid currency \"{$currency}\"");
+    }
+
+    if ($currency === ' ') {
+      CRM_Core_Error::deprecatedWarning('Passing empty currency to CRM_Utils_Money::format is deprecated if you need it for display without currency call CRM_Utils_Money::formatLocaleNumericRounded');
     }
 
     $amount = self::formatNumericByFormat($amount, $valueFormat);
@@ -139,8 +141,9 @@ class CRM_Utils_Money {
    */
   public static function subtractCurrencies($leftOp, $rightOp, $currency) {
     if (is_numeric($leftOp) && is_numeric($rightOp)) {
-      $money = Money::of($leftOp, $currency, new DefaultContext(), RoundingMode::CEILING);
-      return $money->minus($rightOp)->getAmount()->toFloat();
+      $leftMoney = Money::of($leftOp, $currency, new DefaultContext(), RoundingMode::CEILING);
+      $rightMoney = Money::of($rightOp, $currency, new DefaultContext(), RoundingMode::CEILING);
+      return $leftMoney->minus($rightMoney)->getAmount()->toFloat();
     }
   }
 
@@ -179,7 +182,7 @@ class CRM_Utils_Money {
    */
   protected static function formatLocaleNumeric($amount) {
     if (CRM_Core_Config::singleton()->moneyvalueformat !== '%!i') {
-      CRM_Core_Error::deprecatedFunctionWarning('Having a Money Value format other than !%i is deprecated, please report this on GitLab with the relevant moneyValueFormat you use.');
+      CRM_Core_Error::deprecatedWarning('Having a Money Value format other than !%i is deprecated, please report this on GitLab with the relevant moneyValueFormat you use.');
     }
     return self::formatNumericByFormat($amount, CRM_Core_Config::singleton()->moneyvalueformat);
   }
@@ -200,7 +203,15 @@ class CRM_Utils_Money {
    * @return string
    */
   protected static function formatLocaleNumericRounded($amount, $numberOfPlaces) {
-    return self::formatLocaleNumeric(round($amount, $numberOfPlaces));
+    if (!extension_loaded('intl')) {
+      self::missingIntlNotice();
+      return self::formatNumericByFormat($amount, '%!.' . $numberOfPlaces . 'i');
+    }
+    $money = Money::of($amount, CRM_Core_Config::singleton()->defaultCurrency, new CustomContext($numberOfPlaces), RoundingMode::CEILING);
+    $formatter = new \NumberFormatter(CRM_Core_I18n::getLocale(), NumberFormatter::CURRENCY);
+    $formatter->setSymbol(\NumberFormatter::CURRENCY_SYMBOL, '');
+    $formatter->setAttribute(\NumberFormatter::MIN_FRACTION_DIGITS, $numberOfPlaces);
+    return $money->formatWith($formatter);
   }
 
   /**
@@ -215,7 +226,42 @@ class CRM_Utils_Money {
    *   Formatted amount.
    */
   public static function formatLocaleNumericRoundedByCurrency($amount, $currency) {
-    $amount = self::formatLocaleNumericRounded($amount, self::getCurrencyPrecision($currency));
+    return self::formatLocaleNumericRoundedByPrecision($amount, self::getCurrencyPrecision($currency));
+  }
+
+  /**
+   * Format money for display (just numeric part) according to the current locale with rounding to the supplied precision.
+   *
+   * This handles both rounding & replacement of the currency separators for the locale.
+   *
+   * @param string $amount
+   * @param int $precision
+   *
+   * @return string
+   *   Formatted amount.
+   */
+  public static function formatLocaleNumericRoundedByPrecision($amount, $precision) {
+    $amount = self::formatLocaleNumericRounded($amount, $precision);
+    return self::replaceCurrencySeparators($amount);
+  }
+
+  /**
+   * Format money for display with rounding to the supplied precision but without padding.
+   *
+   * If the string is shorter than the precision trailing zeros are not added to reach the precision
+   * beyond the 2 required for normally currency formatting.
+   *
+   * This handles both rounding & replacement of the currency separators for the locale.
+   *
+   * @param string $amount
+   * @param int $precision
+   *
+   * @return string
+   *   Formatted amount.
+   */
+  public static function formatLocaleNumericRoundedByOptionalPrecision($amount, $precision) {
+    $decimalPlaces = strlen(substr($amount, strpos($amount, '.') + 1));
+    $amount = self::formatLocaleNumericRounded($amount, $precision > $decimalPlaces ? $decimalPlaces : $precision);
     return self::replaceCurrencySeparators($amount);
   }
 
@@ -268,6 +314,13 @@ class CRM_Utils_Money {
       setlocale(LC_MONETARY, $lc);
     }
     return $amount;
+  }
+
+  /**
+   * Emits a notice indicating we have fallen back to a less accurate way of formatting money due to missing intl extension
+   */
+  public static function missingIntlNotice() {
+    CRM_Core_Session::singleton()->setStatus(ts('As this system does not include the PHP intl extension, CiviCRM has fallen back onto a slightly less accurate and deprecated method to format money'), ts('Missing PHP INTL extension'));
   }
 
 }

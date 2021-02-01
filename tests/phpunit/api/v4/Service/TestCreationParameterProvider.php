@@ -53,6 +53,12 @@ class TestCreationParameterProvider {
     $requiredParams = [];
     foreach ($requiredFields as $requiredField) {
       $value = $this->getRequiredValue($requiredField);
+      if ($entity === 'UFField' && $requiredField->getName() === 'field_name') {
+        // This is a ruthless hack to avoid a unique constraint - but
+        // it's also a test class & hard to care enough to do something
+        // better
+        $value = 'activity_campaign_id';
+      }
       $requiredParams[$requiredField->getName()] = $value;
     }
 
@@ -101,7 +107,7 @@ class TestCreationParameterProvider {
    */
   private function getOption(FieldSpec $field) {
     $options = array_column($field->getOptions(), 'label', 'id');
-    return array_rand($options);
+    return key($options);
   }
 
   /**

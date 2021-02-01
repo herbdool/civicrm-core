@@ -121,11 +121,12 @@ class CRM_Core_DAO extends DB_DataObject {
 
   /**
    * Returns localized title of this entity.
+   *
    * @return string
    */
   public static function getEntityTitle() {
     $className = static::class;
-    Civi::log()->warning("$className needs to be regeneraged. Missing getEntityTitle method.", ['civi.tag' => 'deprecated']);
+    CRM_Core_Error::deprecatedWarning("$className needs to be regenerated. Missing getEntityTitle method.");
     return CRM_Core_DAO_AllCoreTables::getBriefName($className);
   }
 
@@ -146,10 +147,21 @@ class CRM_Core_DAO extends DB_DataObject {
   }
 
   /**
-   * Empty definition for virtual function.
+   * Returns the name of this table
+   *
+   * @return string
    */
   public static function getTableName() {
-    return NULL;
+    return self::getLocaleTableName(static::$_tableName ?? NULL);
+  }
+
+  /**
+   * Returns if this table needs to be logged
+   *
+   * @return bool
+   */
+  public function getLog() {
+    return static::$_log ?? FALSE;
   }
 
   /**
@@ -161,6 +173,7 @@ class CRM_Core_DAO extends DB_DataObject {
   public static function init($dsn) {
     Civi::$statics[__CLASS__]['init'] = 1;
     $options = &PEAR::getStaticProperty('DB_DataObject', 'options');
+    $dsn = CRM_Utils_SQL::autoSwitchDSN($dsn);
     $options['database'] = $dsn;
     $options['quote_identifiers'] = TRUE;
     if (CRM_Utils_SQL::isSSLDSN($dsn)) {
@@ -173,16 +186,6 @@ class CRM_Core_DAO extends DB_DataObject {
     }
     $factory = new CRM_Contact_DAO_Factory();
     CRM_Core_DAO::setFactory($factory);
-    $currentModes = CRM_Utils_SQL::getSqlModes();
-    if (CRM_Utils_Constant::value('CIVICRM_MYSQL_STRICT', CRM_Utils_System::isDevelopment())) {
-      if (CRM_Utils_SQL::supportsFullGroupBy() && !in_array('ONLY_FULL_GROUP_BY', $currentModes) && CRM_Utils_SQL::isGroupByModeInDefault()) {
-        $currentModes[] = 'ONLY_FULL_GROUP_BY';
-      }
-      if (!in_array('STRICT_TRANS_TABLES', $currentModes)) {
-        $currentModes = array_merge(['STRICT_TRANS_TABLES'], $currentModes);
-      }
-      CRM_Core_DAO::executeQuery("SET SESSION sql_mode = %1", [1 => [implode(',', $currentModes), 'String']]);
-    }
     CRM_Core_DAO::executeQuery('SET NAMES utf8mb4');
     CRM_Core_DAO::executeQuery('SET @uniqueID = %1', [1 => [CRM_Utils_Request::id(), 'String']]);
   }
@@ -517,8 +520,7 @@ class CRM_Core_DAO extends DB_DataObject {
    * Returns list of FK relationships.
    *
    *
-   * @return array
-   *   Array of CRM_Core_Reference_Interface
+   * @return CRM_Core_Reference_Basic[]
    */
   public static function getReferenceColumns() {
     return [];
@@ -603,9 +605,11 @@ class CRM_Core_DAO extends DB_DataObject {
    * @return CRM_Core_DAO
    */
   public function save($hook = TRUE) {
+    $eventID = uniqid();
     if (!empty($this->id)) {
       if ($hook) {
         $preEvent = new \Civi\Core\DAO\Event\PreUpdate($this);
+        $preEvent->eventID = $eventID;
         \Civi::dispatcher()->dispatch("civi.dao.preUpdate", $preEvent);
       }
 
@@ -613,6 +617,7 @@ class CRM_Core_DAO extends DB_DataObject {
 
       if ($hook) {
         $event = new \Civi\Core\DAO\Event\PostUpdate($this, $result);
+        $event->eventID = $eventID;
         \Civi::dispatcher()->dispatch("civi.dao.postUpdate", $event);
       }
       $this->clearDbColumnValueCache();
@@ -620,6 +625,7 @@ class CRM_Core_DAO extends DB_DataObject {
     else {
       if ($hook) {
         $preEvent = new \Civi\Core\DAO\Event\PreUpdate($this);
+        $preEvent->eventID = $eventID;
         \Civi::dispatcher()->dispatch("civi.dao.preInsert", $preEvent);
       }
 
@@ -627,6 +633,7 @@ class CRM_Core_DAO extends DB_DataObject {
 
       if ($hook) {
         $event = new \Civi\Core\DAO\Event\PostUpdate($this, $result);
+        $event->eventID = $eventID;
         \Civi::dispatcher()->dispatch("civi.dao.postInsert", $event);
       }
     }
@@ -745,8 +752,9 @@ class CRM_Core_DAO extends DB_DataObject {
         else {
           $maxLength = $field['maxlength'] ?? NULL;
           if (!is_array($value) && $maxLength && mb_strlen($value) > $maxLength && empty($field['pseudoconstant'])) {
-            Civi::log()->warning(ts('A string for field $dbName has been truncated. The original string was %1', [CRM_Utils_Type::escape($value, 'String')]));
-            // The string is too long - what to do what to do? Well losing data is generally bad so lets' truncate
+            // No ts() since this is a sysadmin-y string not seen by general users.
+            Civi::log()->warning('A string for field {dbName} has been truncated. The original string was {value}.', ['dbName' => $dbName, 'value' => $value]);
+            // The string is too long - what to do what to do? Well losing data is generally bad so let's truncate
             $value = CRM_Utils_String::ellipsify($value, $maxLength);
           }
           $this->$dbName = $value;
@@ -2271,7 +2279,6 @@ SELECT contact_id
     // test for create view and trigger permissions and if allowed, add the option to go multilingual
     // and logging
     // I'm not sure why we use the getStaticProperty for an error, rather than checking for DB_Error
-    CRM_Core_TemporaryErrorScope::ignoreException();
     $dao = new CRM_Core_DAO();
     if ($view) {
       $result = $dao->query('CREATE OR REPLACE VIEW civicrm_domain_view AS SELECT * FROM civicrm_domain');
@@ -2725,11 +2732,11 @@ SELECT contact_id
    */
   public function getFieldSpec($fieldName) {
     $fields = $this->fields();
-    $fieldKeys = $this->fieldKeys();
 
     // Support "unique names" as well as sql names
     $fieldKey = $fieldName;
     if (empty($fields[$fieldKey])) {
+      $fieldKeys = $this->fieldKeys();
       $fieldKey = $fieldKeys[$fieldName] ?? NULL;
     }
     // If neither worked then this field doesn't exist. Return false.
@@ -2768,6 +2775,22 @@ SELECT contact_id
    */
   public static function createSQLFilter($fieldName, $filter, $type = NULL, $alias = NULL, $returnSanitisedArray = FALSE) {
     foreach ($filter as $operator => $criteria) {
+      if (!CRM_Core_BAO_SchemaHandler::databaseSupportsUTF8MB4()) {
+        foreach ((array) $criteria as $criterion) {
+          if (!empty($criterion) && !is_numeric($criterion)
+            // The first 2 criteria are redundant but are added as they
+            // seem like they would
+            // be quicker than this 3rd check.
+            && max(array_map('ord', str_split($criterion))) >= 240) {
+            // String contains unsupported emojis.
+            // We return a clause that resolves to false as an emoji string by definition cannot be saved.
+            // note that if we return just 0 for false if gets lost in empty checks.
+            // https://stackoverflow.com/questions/16496554/can-php-detect-4-byte-encoded-utf8-chars
+            return '0 = 1';
+          }
+        }
+      }
+
       if (in_array($operator, self::acceptedSQLOperators(), TRUE)) {
         switch ($operator) {
           // unary operators
@@ -2829,7 +2852,7 @@ SELECT contact_id
   /**
    * @see http://issues.civicrm.org/jira/browse/CRM-9150
    * support for other syntaxes is discussed in ticket but being put off for now
-   * @return array
+   * @return string[]
    */
   public static function acceptedSQLOperators() {
     return [
@@ -3126,6 +3149,25 @@ SELECT contact_id
     if (isset($this->name)) {
       unset(self::$_dbColumnValueCache[$daoName]['name'][$this->name]);
     }
+  }
+
+  /**
+   * Return a mapping from field-name to the corresponding key (as used in fields()).
+   *
+   * @return array
+   *   Array(string $name => string $uniqueName).
+   */
+  public static function fieldKeys() {
+    return array_flip(CRM_Utils_Array::collect('name', static::fields()));
+  }
+
+  /**
+   * Returns system paths related to this entity (as defined in the xml schema)
+   *
+   * @return array
+   */
+  public static function getEntityPaths() {
+    return static::$_paths ?? [];
   }
 
 }

@@ -600,16 +600,7 @@ abstract class CRM_Core_Payment {
         return $gotText;
 
       case 'contributionPageContinueText':
-        if ($params['amount'] <= 0) {
-          return ts('To complete this transaction, click the <strong>Continue</strong> button below.');
-        }
-        if ($this->_paymentProcessor['billing_mode'] == 4) {
-          return ts('Click the <strong>Continue</strong> button to go to %1, where you will select your payment method and complete the contribution.', [$this->_paymentProcessor['payment_processor_type']]);
-        }
-        if ($params['is_payment_to_existing']) {
-          return ts('To complete this transaction, click the <strong>Make Payment</strong> button below.');
-        }
-        return ts('To complete your contribution, click the <strong>Continue</strong> button below.');
+        return ts('Click the <strong>Continue</strong> button to proceed with the payment.');
 
       case 'cancelRecurDetailText':
         if ($params['mode'] === 'auto_renew') {
@@ -1131,7 +1122,7 @@ abstract class CRM_Core_Payment {
         '' => ts('- select -'),
       ] + CRM_Core_PseudoConstant::country(),
       'is_required' => TRUE,
-      'extra' => ['class' => 'required'],
+      'extra' => ['class' => 'required crm-form-select2 crm-select2'],
     ];
     return $metadata;
   }
@@ -1221,7 +1212,7 @@ abstract class CRM_Core_Payment {
   /**
    * Get URL to return the browser to on success.
    *
-   * @param $qfKey
+   * @param string $qfKey
    *
    * @return string
    */
@@ -1688,7 +1679,8 @@ abstract class CRM_Core_Payment {
    * @param null $entity
    * @param string $action
    *
-   * @return string
+   * @return string|null
+   * @throws \CRM_Core_Exception
    */
   public function subscriptionURL($entityID = NULL, $entity = NULL, $action = 'cancel') {
     // Set URL
