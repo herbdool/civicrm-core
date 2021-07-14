@@ -91,7 +91,11 @@ WHERE  civicrm_pcp.contact_id = civicrm_contact.id
     $query = '
 SELECT pcp.*, block.is_tellfriend_enabled FROM civicrm_pcp pcp
 LEFT JOIN civicrm_pcp_block block ON block.id = pcp.pcp_block_id
+LEFT OUTER JOIN civicrm_contribution_page cp ON (cp.id = pcp.page_id AND pcp.page_type = "contribute")
+LEFT OUTER JOIN civicrm_event event ON (event.id = pcp.page_id AND pcp.page_type = "event")
 WHERE pcp.is_active = 1
+  AND (cp.is_active = 1 OR event.is_active = 1)
+  AND (cp.end_date >= DATE_FORMAT(NOW(), "%Y-%m-%d %H:%i:%s") OR event.end_date >= DATE_FORMAT(NOW(), "%Y-%m-%d %H:%i:%s"))
   AND pcp.contact_id = %1
 ORDER BY page_type, page_id';
 
@@ -161,8 +165,12 @@ AND target_entity_id NOT IN ( " . implode(',', $entityIds) . ") )";
 SELECT *
 FROM civicrm_pcp_block block
 LEFT JOIN civicrm_pcp pcp ON pcp.pcp_block_id = block.id
+LEFT OUTER JOIN civicrm_contribution_page cp ON (cp.id = pcp.page_id AND pcp.page_type = 'contribute')
+LEFT OUTER JOIN civicrm_event event ON (event.id = pcp.page_id AND pcp.page_type = 'event')
 WHERE block.is_active = 1
 {$clause}
+  AND (cp.is_active = 1 OR event.is_active = 1)
+  AND (cp.end_date >= DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') OR event.end_date >= DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))
 GROUP BY block.id, pcp.id
 ORDER BY target_entity_type, target_entity_id
 ";
@@ -184,6 +192,7 @@ ORDER BY target_entity_type, target_entity_id
       if ($pageTitle) {
         $pcpBlock[] = [
           'pageId' => $pcpBlockDao->target_entity_id,
+          'pageComponent' => $pcpBlockDao->target_entity_type,
           'pageTitle' => $pageTitle,
           'action' => $action,
         ];
